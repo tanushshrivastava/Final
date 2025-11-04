@@ -22,6 +22,7 @@ fun ScheduleScreen(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        // Schedule title
         Text(
             text = "Current Schedule",
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -30,6 +31,7 @@ fun ScheduleScreen(modifier: Modifier = Modifier) {
                 .padding(top = 8.dp)
         )
 
+        // Where the schedule goes
         Column(
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally
