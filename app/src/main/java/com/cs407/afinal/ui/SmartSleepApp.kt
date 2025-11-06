@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.Leaderboard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -23,7 +24,7 @@ import androidx.navigation.compose.rememberNavController
 @Composable
 fun SmartSleepApp() {
     val navController = rememberNavController()
-    val destinations = remember { listOf(BottomDestination.Planner, BottomDestination.Account) }
+    val destinations = remember { listOf(BottomDestination.Planner, BottomDestination.Trends, BottomDestination.Account) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
@@ -58,6 +59,9 @@ fun SmartSleepApp() {
             composable(BottomDestination.Planner.route) {
                 SleepCalculatorScreen()
             }
+            composable(BottomDestination.Trends.route) {
+                TrendsScreen()
+            }
             composable(BottomDestination.Account.route) {
                 AccountScreen()
             }
@@ -71,5 +75,6 @@ private sealed class BottomDestination(
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
     object Planner : BottomDestination("planner", "Planner", Icons.Outlined.Alarm)
+    object Trends : BottomDestination("trends", "Trends", Icons.Outlined.Leaderboard)
     object Account : BottomDestination("account", "Account", Icons.Outlined.AccountCircle)
 }
