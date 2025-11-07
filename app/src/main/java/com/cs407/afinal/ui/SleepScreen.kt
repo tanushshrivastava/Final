@@ -108,7 +108,7 @@ fun SleepCalculatorScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Smart Sleep Cycle Alarm") }
+                title = { Text("REMAlarm") }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
