@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -23,7 +24,7 @@ import androidx.navigation.compose.rememberNavController
 @Composable
 fun SmartSleepApp() {
     val navController = rememberNavController()
-    val destinations = remember { listOf(BottomDestination.Planner, BottomDestination.Account) }
+    val destinations = remember { listOf(BottomDestination.Alarm, BottomDestination.Schedule, BottomDestination.Account) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
@@ -52,11 +53,13 @@ fun SmartSleepApp() {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = BottomDestination.Planner.route,
+            startDestination = BottomDestination.Alarm.route,
             modifier = Modifier.padding(padding)
         ) {
-            composable(BottomDestination.Planner.route) {
+            composable(BottomDestination.Alarm.route) {
                 SleepCalculatorScreen()
+            }
+            composable(BottomDestination.Schedule.route) {
             }
             composable(BottomDestination.Account.route) {
                 AccountScreen()
@@ -70,6 +73,7 @@ private sealed class BottomDestination(
     val label: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    object Planner : BottomDestination("planner", "Planner", Icons.Outlined.Alarm)
+    object Alarm : BottomDestination("alarm", "Alarm", Icons.Outlined.Alarm)
+    object Schedule : BottomDestination("schedule", "Schedule", Icons.Outlined.CalendarToday)
     object Account : BottomDestination("account", "Account", Icons.Outlined.AccountCircle)
 }
