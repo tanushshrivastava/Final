@@ -5,43 +5,49 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Hotel
-import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Switch
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,27 +55,32 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.launch
 import com.cs407.afinal.model.AlarmItem
 import com.cs407.afinal.model.SleepMode
 import com.cs407.afinal.model.SleepSuggestion
-import com.cs407.afinal.model.SleepSuggestionType
 import com.cs407.afinal.util.SleepCycleCalculator
 import com.cs407.afinal.viewmodel.AlarmScheduleOutcome
 import com.cs407.afinal.viewmodel.SleepViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -82,20 +93,61 @@ fun SleepCalculatorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-
     val context = LocalContext.current
+
     var hasNotificationPermission by remember {
         mutableStateOf(isNotificationPermissionGranted(context))
     }
     val notificationsPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasNotificationPermission = granted
-    }
+    ) { granted -> hasNotificationPermission = granted }
 
     var showTimePicker by remember { mutableStateOf(false) }
-    var createDialogState by remember { mutableStateOf<CreateAlarmDialogState?>(null) }
-    var editDialogAlarm by remember { mutableStateOf<AlarmItem?>(null) }
+    var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
+    var selectedBedTimeOption by remember { mutableStateOf<BedTimeOption>(BedTimeOption.SleepNow) }
+    var customBedTime by remember { mutableStateOf<LocalTime?>(null) }
+    var suggestions by remember { mutableStateOf<List<SleepSuggestion>>(emptyList()) }
+
+    // Track primary alarm and follow-up alarms
+    val primaryAlarm = uiState.alarms.firstOrNull()
+    val followUpAlarms = remember { mutableStateListOf<FollowUpAlarm>() }
+    var showAddFollowUpDialog by remember { mutableStateOf(false) }
+
+    // Update current time every minute
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTime = Calendar.getInstance()
+            delay(60000L)
+        }
+    }
+
+    // Calculate suggestions based on selected option (1-6 cycles, no buffer)
+    LaunchedEffect(selectedBedTimeOption, customBedTime, currentTime) {
+        val bedTime = when (selectedBedTimeOption) {
+            BedTimeOption.SleepNow -> ZonedDateTime.now()
+            BedTimeOption.Custom -> customBedTime?.let {
+                SleepCycleCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
+            }
+        }
+        bedTime?.let { bed ->
+            suggestions = (1..6).map { cycles ->
+                val totalMinutes = cycles * 90 // Removed buffer for now
+                val suggestedTime = bed.plusMinutes(totalMinutes.toLong())
+                val hours = totalMinutes / 60
+                val mins = totalMinutes % 60
+                val durationText = if (mins == 0) "${hours}h sleep" else "${hours}h ${mins}m sleep"
+
+                SleepSuggestion(
+                    id = "wake-$cycles",
+                    displayMillis = suggestedTime.toInstant().toEpochMilli(),
+                    cycles = cycles,
+                    type = com.cs407.afinal.model.SleepSuggestionType.WAKE_UP,
+                    note = durationText,
+                    referenceMillis = bed.toInstant().toEpochMilli()
+                )
+            }
+        }
+    }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let { message ->
@@ -106,664 +158,507 @@ fun SleepCalculatorScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text("Smart Sleep Cycle Alarm") }
-            )
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .background(Color(0xFFE8EAF6))
+                .padding(padding),
+            contentAlignment = Alignment.TopCenter
         ) {
-            item {
-                SyncStatusCard(email = uiState.currentUserEmail)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                item {
-                    NotificationPermissionCard(
-                        onRequestPermission = {
-                            notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                    )
-                }
-            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Set Alarm",
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
 
-            item {
-                SleepModeSection(
-                    mode = uiState.mode,
-                    onModeSelected = { viewModel.onModeChanged(it) }
-                )
-            }
-            item {
-                val normalizedDateTime = SleepCycleCalculator
-                    .normalizeTargetDateTime(uiState.mode, uiState.targetTime)
-                TargetTimeCard(
-                    targetTime = uiState.targetTime,
-                    mode = uiState.mode,
-                    relativeLabel = formatRelativeDayLabel(normalizedDateTime.toInstant().toEpochMilli()),
-                    onClick = { showTimePicker = true }
-                )
-            }
-            if (uiState.mode == SleepMode.WAKE_TIME) {
-                item {
-                    val normalizedWakeMillis = SleepCycleCalculator
-                        .normalizeTargetDateTime(SleepMode.WAKE_TIME, uiState.targetTime)
-                        .toInstant().toEpochMilli()
-                    Button(
-                        onClick = {
-                            val suggestedBedtime = uiState.suggestions.firstOrNull()?.displayMillis
-                            createDialogState = CreateAlarmDialogState(
-                                triggerAtMillis = normalizedWakeMillis,
-                                cycles = uiState.suggestions.firstOrNull()?.cycles,
-                                plannedBedTimeMillis = suggestedBedtime
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Set alarm for ${formatEpochMillisWithDay(normalizedWakeMillis)}")
-                    }
-                }
-            }
-            item {
-                FilledTonalButton(
-                    onClick = { viewModel.onSleepNowSelected() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Sleep Now — suggest wake-up times")
-                }
-            }
-            if (uiState.suggestions.isNotEmpty()) {
-                item {
-                    SuggestionsSection(
-                        mode = uiState.mode,
-                        suggestions = uiState.suggestions,
-                        onScheduleRequested = { suggestion ->
-                            createDialogState = CreateAlarmDialogState(
-                                triggerAtMillis = suggestion.displayMillis,
-                                cycles = suggestion.cycles,
-                                plannedBedTimeMillis = suggestion.referenceMillis
-                                    ?.takeIf { suggestion.type == SleepSuggestionType.WAKE_UP }
-                            )
-                        }
+                // Permission Warning at top
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                    PermissionWarningCard(
+                        onGrant = { notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
                     )
                 }
-            }
-            item {
-                AlarmListSection(
-                    alarms = uiState.alarms,
-                    onToggle = { alarm, enabled ->
-                        when (val result = viewModel.toggleAlarm(alarm, enabled)) {
-                            AlarmScheduleOutcome.MissingExactAlarmPermission -> promptExactAlarmPermission(context)
-                            is AlarmScheduleOutcome.Error -> {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(result.reason)
+
+                // Sync Status - Compact
+                if (uiState.currentUserEmail != null) {
+                    Text(
+                        text = "☁️ Synced to ${uiState.currentUserEmail}",
+                        fontSize = 12.sp,
+                        color = Color(0xFF5C6BC0)
+                    )
+                }
+
+                // Main Card - Either set alarm or show active alarm
+                if (primaryAlarm == null) {
+                    SetAlarmCard(
+                        currentTime = currentTime,
+                        selectedOption = selectedBedTimeOption,
+                        customBedTime = customBedTime,
+                        suggestions = suggestions,
+                        onOptionSelected = { selectedBedTimeOption = it },
+                        onSetCustomTime = { showTimePicker = true },
+                        onScheduleAlarm = { suggestion ->
+                            val bedTimeMillis = when (selectedBedTimeOption) {
+                                BedTimeOption.SleepNow -> System.currentTimeMillis()
+                                BedTimeOption.Custom -> customBedTime?.let {
+                                    SleepCycleCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
+                                        .toInstant().toEpochMilli()
                                 }
                             }
-                            else -> Unit
+
+                            when (val result = viewModel.tryScheduleAlarm(
+                                triggerAtMillis = suggestion.displayMillis,
+                                label = "Wake up",
+                                gentleWake = true,
+                                cycles = suggestion.cycles,
+                                plannedBedTimeMillis = bedTimeMillis
+                            )) {
+                                AlarmScheduleOutcome.MissingExactAlarmPermission -> promptExactAlarmPermission(context)
+                                is AlarmScheduleOutcome.Error -> {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(result.reason)
+                                    }
+                                }
+                                else -> {
+                                    selectedBedTimeOption = BedTimeOption.SleepNow
+                                    customBedTime = null
+                                }
+                            }
                         }
-                    },
-                    onEdit = { editDialogAlarm = it },
-                    onDelete = { viewModel.deleteAlarm(it.id) }
-                )
-            }
-            if (uiState.history.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "Recent sleep history",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                } else {
+                    ActiveAlarmCard(
+                        alarm = primaryAlarm,
+                        followUpAlarms = followUpAlarms,
+                        onToggle = { enabled ->
+                            when (val result = viewModel.toggleAlarm(primaryAlarm, enabled)) {
+                                AlarmScheduleOutcome.MissingExactAlarmPermission -> promptExactAlarmPermission(context)
+                                is AlarmScheduleOutcome.Error -> {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(result.reason)
+                                    }
+                                }
+                                else -> Unit
+                            }
+                        },
+                        onDelete = {
+                            viewModel.deleteAlarm(primaryAlarm.id)
+                            followUpAlarms.clear()
+                        },
+                        onAddFollowUp = { showAddFollowUpDialog = true },
+                        onDeleteFollowUp = { followUp ->
+                            followUpAlarms.remove(followUp)
+                        }
                     )
                 }
-                items(uiState.history) { entry ->
-                    HistoryCard(
-                        label = entry.label,
-                        wakeMillis = entry.plannedWakeMillis,
-                        dismissedMillis = entry.actualDismissedMillis,
-                        bedMillis = entry.plannedBedTimeMillis
-                    )
-                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 
     if (showTimePicker) {
         TimeSelectionDialog(
-            initialTime = uiState.targetTime,
+            initialTime = customBedTime ?: LocalTime.now(),
             onDismiss = { showTimePicker = false },
             onConfirm = {
-                viewModel.onTargetTimeChanged(it)
+                customBedTime = it
                 showTimePicker = false
             }
         )
     }
 
-    createDialogState?.let { state ->
-        AlarmConfirmationDialog(
-            triggerAtMillis = state.triggerAtMillis,
-            cycles = state.cycles,
-            plannedBedTimeMillis = state.plannedBedTimeMillis,
-            onDismiss = { createDialogState = null },
-            onConfirm = { label, gentle ->
-                when (val result = viewModel.tryScheduleAlarm(
-                    triggerAtMillis = state.triggerAtMillis,
-                    label = label,
-                    gentleWake = gentle,
-                    cycles = state.cycles,
-                    plannedBedTimeMillis = state.plannedBedTimeMillis
-                )) {
-                    AlarmScheduleOutcome.MissingExactAlarmPermission -> {
-                        promptExactAlarmPermission(context)
-                    }
-                    is AlarmScheduleOutcome.Error -> {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(result.reason)
-                        }
-                    }
-                    else -> Unit
+    if (showAddFollowUpDialog) {
+        AddFollowUpDialog(
+            onDismiss = { showAddFollowUpDialog = false },
+            onConfirm = { minutes ->
+                primaryAlarm?.let { alarm ->
+                    followUpAlarms.add(
+                        FollowUpAlarm(
+                            id = followUpAlarms.size,
+                            minutesAfter = minutes,
+                            triggerAtMillis = alarm.triggerAtMillis + (minutes * 60 * 1000)
+                        )
+                    )
                 }
-                createDialogState = null
-            }
-        )
-    }
-
-    editDialogAlarm?.let { alarm ->
-        EditAlarmDialog(
-            alarm = alarm,
-            onDismiss = { editDialogAlarm = null },
-            onConfirm = { newMillis, label, gentle ->
-                when (val result = viewModel.updateAlarm(
-                    alarmId = alarm.id,
-                    triggerAtMillis = newMillis,
-                    label = label,
-                    gentleWake = gentle,
-                    plannedBedTimeMillis = alarm.plannedBedTimeMillis
-                )) {
-                    AlarmScheduleOutcome.MissingExactAlarmPermission -> {
-                        promptExactAlarmPermission(context)
-                    }
-                    is AlarmScheduleOutcome.Error -> {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(result.reason)
-                        }
-                    }
-                    else -> Unit
-                }
-                editDialogAlarm = null
+                showAddFollowUpDialog = false
             }
         )
     }
 }
 
 @Composable
-private fun SleepModeSection(
-    mode: SleepMode,
-    onModeSelected: (SleepMode) -> Unit
+private fun SetAlarmCard(
+    currentTime: Calendar,
+    selectedOption: BedTimeOption,
+    customBedTime: LocalTime?,
+    suggestions: List<SleepSuggestion>,
+    onOptionSelected: (BedTimeOption) -> Unit,
+    onSetCustomTime: () -> Unit,
+    onScheduleAlarm: (SleepSuggestion) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFD6DBFA)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Plan your sleep",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                text = "When are you sleeping?",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF3F51B5)
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilterChip(
-                    selected = mode == SleepMode.WAKE_TIME,
-                    onClick = { onModeSelected(SleepMode.WAKE_TIME) },
-                    label = { Text("Wake-up time") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.LightMode, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
-                )
-                FilterChip(
-                    selected = mode == SleepMode.BED_TIME,
-                    onClick = { onModeSelected(SleepMode.BED_TIME) },
-                    label = { Text("Bedtime") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Hotel, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
+
+            // Time Display
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White, RoundedCornerShape(8.dp))
+                    .padding(vertical = 20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val sdf = SimpleDateFormat("hh:mm a", Locale.US)
+                val displayTime = when (selectedOption) {
+                    BedTimeOption.SleepNow -> sdf.format(currentTime.time)
+                    BedTimeOption.Custom -> customBedTime?.let { formatLocalTime(it) } ?: "Select time"
+                }
+                Text(
+                    text = displayTime,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
                 )
             }
+
+            // Bed Time Options
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                FilterChip(
+                    selected = selectedOption == BedTimeOption.SleepNow,
+                    onClick = { onOptionSelected(BedTimeOption.SleepNow) },
+                    label = { Text("Sleep Now", fontSize = 13.sp) },
+                    modifier = Modifier.weight(1f),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFF5C6BC0),
+                        selectedLabelColor = Color.White
+                    )
+                )
+                FilterChip(
+                    selected = selectedOption == BedTimeOption.Custom,
+                    onClick = {
+                        onOptionSelected(BedTimeOption.Custom)
+                        if (customBedTime == null) onSetCustomTime()
+                    },
+                    label = { Text("Custom Time", fontSize = 13.sp) },
+                    modifier = Modifier.weight(1f),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFF5C6BC0),
+                        selectedLabelColor = Color.White
+                    )
+                )
+            }
+
+            if (selectedOption == BedTimeOption.Custom) {
+                TextButton(onClick = onSetCustomTime) {
+                    Text("Change Time", fontSize = 12.sp, color = Color(0xFF5C6BC0))
+                }
+            }
+
             Text(
-                text = when (mode) {
-                    SleepMode.WAKE_TIME -> "Choose when you need to wake up. We’ll suggest ideal bedtimes so you complete full sleep cycles."
-                    SleepMode.BED_TIME -> "Pick your bedtime (or tap “Sleep Now”). We’ll suggest 2–3 gentle wake times aligned with full cycles."
-                },
-                style = MaterialTheme.typography.bodyMedium
+                text = "Optimal Wake Times (90-min REM Cycles)",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF3F51B5),
+                modifier = Modifier.padding(top = 8.dp)
             )
+
+            // Scrollable Suggestions
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                suggestions.forEach { suggestion ->
+                    SuggestionOption(
+                        suggestion = suggestion,
+                        onClick = { onScheduleAlarm(suggestion) }
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun TargetTimeCard(
-    targetTime: LocalTime,
-    mode: SleepMode,
-    relativeLabel: String,
+private fun ActiveAlarmCard(
+    alarm: AlarmItem,
+    followUpAlarms: List<FollowUpAlarm>,
+    onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+    onAddFollowUp: () -> Unit,
+    onDeleteFollowUp: (FollowUpAlarm) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFC5E1A5)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "✓ Alarm Set",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF33691E)
+            )
+
+            // Large alarm time display
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White, RoundedCornerShape(8.dp))
+                    .padding(vertical = 32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = formatEpochMillisTime(alarm.triggerAtMillis),
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = formatDayLabel(alarm.triggerAtMillis),
+                        fontSize = 14.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+
+            alarm.targetCycles?.let {
+                Text(
+                    text = "$it sleep cycles",
+                    fontSize = 12.sp,
+                    color = Color(0xFF558B2F)
+                )
+            }
+
+            // Follow-up alarms section
+            if (followUpAlarms.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    followUpAlarms.forEach { followUp ->
+                        FollowUpAlarmItem(
+                            followUp = followUp,
+                            onDelete = { onDeleteFollowUp(followUp) }
+                        )
+                    }
+                }
+            }
+
+            // Add follow-up button
+            OutlinedButton(
+                onClick = onAddFollowUp,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color(0xFF33691E)
+                )
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.size(4.dp))
+                Text("Add Reminder", fontSize = 13.sp)
+            }
+
+            // Delete button
+            Button(
+                onClick = onDelete,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF558B2F)),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Text("Delete Alarm", modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FollowUpAlarmItem(
+    followUp: FollowUpAlarm,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE0B2))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = formatEpochMillisTime(followUp.triggerAtMillis),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Text(
+                    text = "+${followUp.minutesAfter} min reminder",
+                    fontSize = 11.sp,
+                    color = Color(0xFFE65100)
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Text("✕", fontSize = 20.sp, color = Color(0xFFE65100))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionOption(
+    suggestion: SleepSuggestion,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        onClick = onClick
     ) {
-        Surface(onClick = onClick) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = if (mode == SleepMode.WAKE_TIME) "Desired wake time" else "Bedtime target",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-                Text(
-                    text = formatLocalTime(targetTime),
-                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = relativeLabel,
-                    style = MaterialTheme.typography.labelSmall
-                )
-                Text(
-                    text = "Tap to adjust",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SuggestionsSection(
-    mode: SleepMode,
-    suggestions: List<SleepSuggestion>,
-    onScheduleRequested: (SleepSuggestion) -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = if (mode == SleepMode.WAKE_TIME) "Recommended bedtimes" else "Optimal wake-up alarms",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-        )
-        suggestions.forEach { suggestion ->
-            SuggestionCard(
-                suggestion = suggestion,
-                mode = mode,
-                onSchedule = onScheduleRequested
-            )
-        }
-    }
-}
-
-@Composable
-private fun SuggestionCard(
-    suggestion: SleepSuggestion,
-    mode: SleepMode,
-    onSchedule: (SleepSuggestion) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = formatEpochMillisWithDay(suggestion.displayMillis),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
-            )
-            Text(
-                text = when (suggestion.type) {
-                    SleepSuggestionType.BEDTIME -> "Head to bed around this time to complete ${suggestion.cycles} sleep cycles (${suggestion.note})."
-                    SleepSuggestionType.WAKE_UP -> "Wake up gently after ${suggestion.cycles} full cycles (${suggestion.note})."
-                },
-                style = MaterialTheme.typography.bodyMedium
-            )
-            if (mode == SleepMode.BED_TIME && suggestion.type == SleepSuggestionType.WAKE_UP) {
-                Button(onClick = { onSchedule(suggestion) }) {
-                    Text("Set alarm for ${formatEpochMillisWithDay(suggestion.displayMillis)}")
-                }
-            }
-            if (mode == SleepMode.WAKE_TIME && suggestion.type == SleepSuggestionType.BEDTIME) {
-                Text(
-                    text = "Around ${suggestion.note} of sleep.",
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AlarmListSection(
-    alarms: List<AlarmItem>,
-    onToggle: (AlarmItem, Boolean) -> Unit,
-    onEdit: (AlarmItem) -> Unit,
-    onDelete: (AlarmItem) -> Unit
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "Your alarms",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-        )
-        if (alarms.isEmpty()) {
-            Text(
-                text = "No alarms yet. Set one from the suggestions above.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        } else {
-            alarms.forEach { alarm ->
-                AlarmCard(
-                    alarm = alarm,
-                    onToggle = onToggle,
-                    onEdit = onEdit,
-                    onDelete = onDelete
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AlarmCard(
-    alarm: AlarmItem,
-    onToggle: (AlarmItem, Boolean) -> Unit,
-    onEdit: (AlarmItem) -> Unit,
-    onDelete: (AlarmItem) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column {
-                    Text(
-                        text = formatEpochMillisWithDay(alarm.triggerAtMillis),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Text(
-                        text = alarm.label,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                androidx.compose.material3.Switch(
-                    checked = alarm.isEnabled,
-                    onCheckedChange = { onToggle(alarm, it) }
-                )
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                TextButton(onClick = { onEdit(alarm) }) {
-                    Text("Edit")
-                }
-                TextButton(onClick = { onDelete(alarm) }) {
-                    Text("Delete")
-                }
-            }
-            alarm.targetCycles?.let {
+            Column {
                 Text(
-                    text = "$it cycles planned • ${alarmNote(alarm)}",
-                    style = MaterialTheme.typography.labelMedium
+                    text = formatEpochMillisTime(suggestion.displayMillis),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
                 )
+                Text(
+                    text = "${suggestion.cycles} cycles • ${suggestion.note}",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+
+            if (suggestion.cycles == 6) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF2962FF), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Recommended",
+                        fontSize = 10.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun HistoryCard(
-    label: String,
-    wakeMillis: Long,
-    dismissedMillis: Long,
-    bedMillis: Long?
-) {
+private fun PermissionWarningCard(onGrant: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE0B2))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(label, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
             Text(
-                text = "Planned wake: ${formatEpochMillisWithDay(wakeMillis)}",
-                style = MaterialTheme.typography.bodyMedium
+                text = "⚠️ Enable Notifications",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
             )
-            bedMillis?.let {
-                Text(
-                    text = "Planned bed: ${formatEpochMillisWithDay(it)}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            Text(
+                text = "Grant permission so alarms ring reliably",
+                fontSize = 12.sp
+            )
+            Button(
+                onClick = onGrant,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+            ) {
+                Text("Grant Permission", fontSize = 12.sp)
             }
-            Text(
-                text = "Dismissed at: ${formatEpochMillisWithDay(dismissedMillis)}",
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }
 
 @Composable
-private fun AlarmConfirmationDialog(
-    triggerAtMillis: Long,
-    cycles: Int?,
-    plannedBedTimeMillis: Long?,
+private fun AddFollowUpDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, Boolean) -> Unit
+    onConfirm: (Int) -> Unit
 ) {
-    var labelState by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
-    var gentleWake by rememberSaveable { mutableStateOf(true) }
+    var minutesState by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue("5"))
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Set alarm for ${formatEpochMillisWithDay(triggerAtMillis)}") },
+        title = { Text("Add Follow-up Alarm") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Label your alarm and choose gentle wake to ramp up the volume softly.")
+                Text("Set a reminder alarm after your main alarm")
                 OutlinedTextField(
-                    value = labelState,
-                    onValueChange = { labelState = it },
-                    label = { Text("Alarm label") },
-                    placeholder = { Text("Gym Morning, Exam Day…") }
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    value = minutesState,
+                    onValueChange = { minutesState = it },
+                    label = { Text("Minutes after") },
+                    placeholder = { Text("5") },
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Gentle wake")
-                    Checkbox(
-                        checked = gentleWake,
-                        onCheckedChange = { gentleWake = it }
-                    )
-                }
-                cycles?.let {
-                    Text(
-                        text = "$it sleep cycles • ${SleepCycleCalculatorHelper.durationForCycles(it)}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                plannedBedTimeMillis?.let {
-                    Text(
-                        text = "Suggested bedtime: ${formatEpochMillisWithDay(it)}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(labelState.text, gentleWake) }) {
-                Text("Save alarm")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun NotificationPermissionCard(
-    onRequestPermission: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "Enable gentle alarm notifications",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = "Allow notifications so alarms can ring reliably even if the app is closed.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Button(onClick = onRequestPermission) {
-                Text("Grant notification permission")
-            }
-        }
-    }
-}
-
-@Composable
-private fun SyncStatusCard(email: String?) {
-    val signedIn = !email.isNullOrBlank()
-    val containerColor = if (signedIn) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = if (signedIn) "Cloud sync enabled" else "Local-only mode",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = if (signedIn) {
-                    "Alarms and history sync to $email. Dismiss alarms to save them to your cloud history."
-                } else {
-                    "Not signed in. Alarms stay on this device. Visit the Account tab to sign in and back up your sleep data."
-                },
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
-}
-
-@Composable
-private fun EditAlarmDialog(
-    alarm: AlarmItem,
-    onDismiss: () -> Unit,
-    onConfirm: (Long, String, Boolean) -> Unit
-) {
-    var labelState by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(alarm.label))
-    }
-    var gentleWake by rememberSaveable { mutableStateOf(alarm.gentleWake) }
-    var timeMillis by rememberSaveable { mutableStateOf(alarm.triggerAtMillis) }
-    var showTimePicker by remember { mutableStateOf(false) }
-
-    if (showTimePicker) {
-        TimeSelectionDialog(
-            initialTime = Instant.ofEpochMilli(timeMillis).atZone(ZoneId.systemDefault()).toLocalTime(),
-            onDismiss = { showTimePicker = false },
-            onConfirm = {
-                timeMillis = LocalTimeToMillis(it, timeMillis)
-                showTimePicker = false
-            }
-        )
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit alarm") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Adjust the time or label, then choose whether gentle wake should stay on.")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Alarm time", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = formatEpochMillisWithDay(timeMillis),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                        )
-                    }
-                    TextButton(onClick = { showTimePicker = true }) {
-                        Text("Change")
-                    }
-                }
-                OutlinedTextField(
-                    value = labelState,
-                    onValueChange = { labelState = it },
-                    label = { Text("Alarm label") }
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Gentle wake")
-                    Checkbox(
-                        checked = gentleWake,
-                        onCheckedChange = { gentleWake = it }
-                    )
-                }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(timeMillis, labelState.text, gentleWake) }) {
-                Text("Save changes")
+            Button(onClick = {
+                val minutes = minutesState.text.toIntOrNull() ?: 5
+                onConfirm(minutes)
+            }) {
+                Text("Add")
             }
         },
         dismissButton = {
@@ -789,12 +684,8 @@ private fun TimeSelectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select time") },
-        text = {
-            TimePicker(
-                state = timePickerState
-            )
-        },
+        title = { Text("Select Time") },
+        text = { TimePicker(state = timePickerState) },
         confirmButton = {
             Button(onClick = {
                 onConfirm(LocalTime.of(timePickerState.hour, timePickerState.minute))
@@ -836,19 +727,10 @@ private fun formatLocalTime(localTime: LocalTime): String {
     return formatter.format(date)
 }
 
-private fun formatEpochMillisWithDay(epochMillis: Long): String {
-    val timePart = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(epochMillis))
-    val dayLabel = dayDescriptor(epochMillis)
-    return "$timePart • $dayLabel"
-}
+private fun formatEpochMillisTime(epochMillis: Long): String =
+    SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(epochMillis))
 
-private fun formatRelativeDayLabel(epochMillis: Long): String {
-    val datePart = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date(epochMillis))
-    val dayLabel = dayDescriptor(epochMillis)
-    return "$dayLabel • $datePart"
-}
-
-private fun dayDescriptor(epochMillis: Long): String {
+private fun formatDayLabel(epochMillis: Long): String {
     val date = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate()
     val today = LocalDate.now()
     return when (date) {
@@ -858,29 +740,22 @@ private fun dayDescriptor(epochMillis: Long): String {
     }
 }
 
-private fun alarmNote(alarm: AlarmItem): String {
-    val created = SimpleDateFormat("MMM dd", Locale.getDefault()).format(Date(alarm.createdAtMillis))
-    return "set $created"
+private fun formatDurationMinutes(minutes: Int): String {
+    val hours = minutes / 60
+    val mins = minutes % 60
+    return if (mins == 0) "${hours}h sleep" else "${hours}h ${mins}m sleep"
 }
 
-private object SleepCycleCalculatorHelper {
-    fun durationForCycles(cycles: Int): String {
-        val totalMinutes = cycles * com.cs407.afinal.util.SleepCycleCalculator.CYCLE_MINUTES
-        val hours = totalMinutes / 60
-        val minutes = totalMinutes % 60
-        return if (minutes == 0) "${hours}h" else "${hours}h ${minutes}m"
-    }
+private enum class BedTimeOption {
+    SleepNow,
+    Custom
 }
 
-private fun LocalTimeToMillis(localTime: LocalTime, referenceMillis: Long): Long {
-    val zone = ZoneId.systemDefault()
-    val referenceDateTime = Instant.ofEpochMilli(referenceMillis).atZone(zone)
-    var candidate = localTime.atDate(referenceDateTime.toLocalDate()).atZone(zone)
-    if (candidate.toInstant().toEpochMilli() <= System.currentTimeMillis()) {
-        candidate = candidate.plusDays(1)
-    }
-    return candidate.toInstant().toEpochMilli()
-}
+private data class FollowUpAlarm(
+    val id: Int,
+    val minutesAfter: Int,
+    val triggerAtMillis: Long
+)
 
 private data class CreateAlarmDialogState(
     val triggerAtMillis: Long,
