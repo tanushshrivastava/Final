@@ -5,6 +5,15 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,22 +25,33 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TipsAndUpdates
+import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -56,12 +76,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -207,6 +230,11 @@ fun SleepCalculatorScreen(
                         suggestions = suggestions,
                         onOptionSelected = { selectedBedTimeOption = it },
                         onSetCustomTime = { showTimePicker = true },
+                        onQuickTimeSelected = { minutes ->
+                            val targetTime = LocalTime.now().plusMinutes(minutes.toLong())
+                            customBedTime = targetTime
+                            selectedBedTimeOption = BedTimeOption.Custom
+                        },
                         onScheduleAlarm = { suggestion ->
                             val bedTimeMillis = when (selectedBedTimeOption) {
                                 BedTimeOption.SleepNow -> System.currentTimeMillis()
@@ -237,6 +265,9 @@ fun SleepCalculatorScreen(
                         }
                     )
                 } else {
+                    // Time until alarm countdown
+                    TimeUntilAlarmCard(triggerAtMillis = primaryAlarm.triggerAtMillis)
+                    
                     ActiveAlarmCard(
                         alarm = primaryAlarm,
                         followUpAlarms = followUpAlarms,
@@ -305,8 +336,11 @@ private fun SetAlarmCard(
     suggestions: List<SleepSuggestion>,
     onOptionSelected: (BedTimeOption) -> Unit,
     onSetCustomTime: () -> Unit,
+    onQuickTimeSelected: (Int) -> Unit,
     onScheduleAlarm: (SleepSuggestion) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -323,6 +357,14 @@ private fun SetAlarmCard(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF3F51B5)
+            )
+            
+            // Quick Action Chips
+            QuickActionChips(
+                onQuickSelect = { minutes ->
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onQuickTimeSelected(minutes)
+                }
             )
 
             // Time Display
@@ -389,6 +431,15 @@ private fun SetAlarmCard(
                 color = Color(0xFF3F51B5),
                 modifier = Modifier.padding(top = 8.dp)
             )
+            
+            // Sleep Tip - show for recommended cycle
+            AnimatedVisibility(
+                visible = suggestions.isNotEmpty(),
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                SleepTipCard(cycles = 6)
+            }
 
             // Scrollable Suggestions
             Column(
@@ -418,8 +469,12 @@ private fun ActiveAlarmCard(
     onAddFollowUp: () -> Unit,
     onDeleteFollowUp: (FollowUpAlarm) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFC5E1A5)),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -429,12 +484,23 @@ private fun ActiveAlarmCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "✓ Alarm Set",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF33691E)
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(0xFF33691E),
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "Alarm Set",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF33691E)
+                )
+            }
 
             // Large alarm time display
             Box(
@@ -487,7 +553,10 @@ private fun ActiveAlarmCard(
 
             // Add follow-up button
             OutlinedButton(
-                onClick = onAddFollowUp,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onAddFollowUp()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = Color(0xFF33691E)
@@ -500,7 +569,10 @@ private fun ActiveAlarmCard(
 
             // Delete button
             Button(
-                onClick = onDelete,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onDelete()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF558B2F)),
                 shape = RoundedCornerShape(24.dp)
@@ -516,8 +588,12 @@ private fun FollowUpAlarmItem(
     followUp: FollowUpAlarm,
     onDelete: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE0B2))
     ) {
@@ -528,20 +604,34 @@ private fun FollowUpAlarmItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = formatEpochMillisTime(followUp.triggerAtMillis),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    tint = Color(0xFFE65100),
+                    modifier = Modifier.size(20.dp)
                 )
-                Text(
-                    text = "+${followUp.minutesAfter} min reminder",
-                    fontSize = 11.sp,
-                    color = Color(0xFFE65100)
-                )
+                Column {
+                    Text(
+                        text = formatEpochMillisTime(followUp.triggerAtMillis),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = "+${followUp.minutesAfter} min reminder",
+                        fontSize = 11.sp,
+                        color = Color(0xFFE65100)
+                    )
+                }
             }
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onDelete()
+            }) {
                 Text("✕", fontSize = 20.sp, color = Color(0xFFE65100))
             }
         }
@@ -553,11 +643,19 @@ private fun SuggestionOption(
     suggestion: SleepSuggestion,
     onClick: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    val sleepQuality = getSleepQuality(suggestion.cycles)
+    
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        onClick = onClick
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        }
     ) {
         Row(
             modifier = Modifier
@@ -566,33 +664,50 @@ private fun SuggestionOption(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = formatEpochMillisTime(suggestion.displayMillis),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Sleep Quality Icon
+                Icon(
+                    imageVector = sleepQuality.icon,
+                    contentDescription = null,
+                    tint = sleepQuality.color,
+                    modifier = Modifier.size(28.dp)
                 )
-                Text(
-                    text = "${suggestion.cycles} cycles • ${suggestion.note}",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
+                
+                Column {
+                    Text(
+                        text = formatEpochMillisTime(suggestion.displayMillis),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${suggestion.cycles} cycles • ${suggestion.note}",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
 
-            if (suggestion.cycles == 6) {
-                Box(
-                    modifier = Modifier
-                        .background(Color(0xFF2962FF), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "Recommended",
-                        fontSize = 10.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            // Quality Badge
+            Box(
+                modifier = Modifier
+                    .background(sleepQuality.color.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = sleepQuality.label,
+                    fontSize = 10.sp,
+                    color = sleepQuality.color,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -744,6 +859,185 @@ private fun formatDurationMinutes(minutes: Int): String {
     val hours = minutes / 60
     val mins = minutes % 60
     return if (mins == 0) "${hours}h sleep" else "${hours}h ${mins}m sleep"
+}
+
+// ============ NEW UI COMPONENTS ============
+
+@Composable
+private fun TimeUntilAlarmCard(triggerAtMillis: Long) {
+    var currentTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTimeMillis = System.currentTimeMillis()
+            delay(1000L) // Update every second
+        }
+    }
+    
+    val timeUntil = triggerAtMillis - currentTimeMillis
+    val hours = (timeUntil / (1000 * 60 * 60)).toInt()
+    val minutes = ((timeUntil / (1000 * 60)) % 60).toInt()
+    
+    AnimatedVisibility(
+        visible = timeUntil > 0,
+        enter = fadeIn() + scaleIn(),
+        exit = fadeOut() + scaleOut()
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A237E)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WatchLater,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(32.dp)
+                )
+                Text(
+                    text = "Alarm in",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "${hours}h ${minutes}m",
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                
+                // Progress bar
+                val progress = 1f - (timeUntil.toFloat() / (8 * 60 * 60 * 1000)) // Assuming 8h max
+                LinearProgressIndicator(
+                    progress = progress.coerceIn(0f, 1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp),
+                    color = Color(0xFF4CAF50),
+                    trackColor = Color.White.copy(alpha = 0.2f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionChips(onQuickSelect: (Int) -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "⚡ Quick Sleep In:",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF3F51B5)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                "15 min" to 15,
+                "30 min" to 30,
+                "1 hour" to 60
+            ).forEach { (label, minutes) ->
+                AssistChip(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onQuickSelect(minutes)
+                    },
+                    label = { Text(label, fontSize = 12.sp) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = Color.White,
+                        labelColor = Color(0xFF5C6BC0),
+                        leadingIconContentColor = Color(0xFF5C6BC0)
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SleepTipCard(cycles: Int) {
+    val tips = mapOf(
+        1 to "💡 1.5 hours gives you one complete sleep cycle",
+        2 to "💡 3 hours covers light sleep phases",
+        3 to "💡 4.5 hours - minimum for feeling somewhat rested",
+        4 to "💡 6 hours - good for a quick recovery",
+        5 to "💡 7.5 hours - great sleep duration!",
+        6 to "⭐ 9 hours - optimal sleep for full recovery!"
+    )
+    
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn() + scaleIn()
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.TipsAndUpdates,
+                    contentDescription = null,
+                    tint = Color(0xFFF57F17),
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = tips[cycles] ?: "💡 Sleep in 90-minute cycles for optimal rest",
+                    fontSize = 12.sp,
+                    color = Color(0xFF827717),
+                    lineHeight = 16.sp
+                )
+            }
+        }
+    }
+}
+
+private data class SleepQuality(
+    val label: String,
+    val color: Color,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+private fun getSleepQuality(cycles: Int): SleepQuality {
+    return when {
+        cycles >= 6 -> SleepQuality("Optimal", Color(0xFF2E7D32), Icons.Default.Star)
+        cycles >= 5 -> SleepQuality("Great", Color(0xFF388E3C), Icons.Default.CheckCircle)
+        cycles >= 4 -> SleepQuality("Good", Color(0xFF689F38), Icons.Default.CheckCircle)
+        cycles >= 3 -> SleepQuality("Fair", Color(0xFFF57C00), Icons.Default.Bedtime)
+        else -> SleepQuality("Short", Color(0xFFD32F2F), Icons.Default.Schedule)
+    }
 }
 
 private enum class BedTimeOption {
