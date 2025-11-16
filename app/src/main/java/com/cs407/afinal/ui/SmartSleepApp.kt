@@ -60,6 +60,7 @@ fun SmartSleepApp() {
                 SleepCalculatorScreen()
             }
             composable(BottomDestination.Schedule.route) {
+                ScheduleScreen()
             }
             composable(BottomDestination.Account.route) {
                 AccountScreen()

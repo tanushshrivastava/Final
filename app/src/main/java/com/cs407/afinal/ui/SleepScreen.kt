@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -15,6 +16,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -45,6 +49,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -73,8 +78,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -92,6 +99,8 @@ import com.cs407.afinal.model.AlarmItem
 import com.cs407.afinal.model.SleepMode
 import com.cs407.afinal.model.SleepSuggestion
 import com.cs407.afinal.util.SleepCycleCalculator
+import com.cs407.afinal.util.VoiceCommandHandler
+import com.cs407.afinal.util.VoiceResult
 import com.cs407.afinal.viewmodel.AlarmScheduleOutcome
 import com.cs407.afinal.viewmodel.SleepViewModel
 import kotlinx.coroutines.delay
@@ -125,11 +134,24 @@ fun SleepCalculatorScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasNotificationPermission = granted }
 
+    var hasMicrophonePermission by remember {
+        mutableStateOf(isMicrophonePermissionGranted(context))
+    }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasMicrophonePermission = granted }
+
+    var isListeningForVoice by remember { mutableStateOf(false) }
+    var voiceStatus by remember { mutableStateOf("") }
+    var showVoiceDialog by remember { mutableStateOf(false) }
+    val voiceCommandHandler = remember { VoiceCommandHandler(context) }
+
     var showTimePicker by remember { mutableStateOf(false) }
     var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
     var selectedBedTimeOption by remember { mutableStateOf<BedTimeOption>(BedTimeOption.SleepNow) }
     var customBedTime by remember { mutableStateOf<LocalTime?>(null) }
     var suggestions by remember { mutableStateOf<List<SleepSuggestion>>(emptyList()) }
+    val selectedRecurringDays = remember { mutableStateListOf<Int>() } // 1=Mon, 2=Tue, ..., 7=Sun
 
     // Track primary alarm and follow-up alarms
     val primaryAlarm = uiState.alarms.firstOrNull()
@@ -181,7 +203,83 @@ fun SleepCalculatorScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            if (primaryAlarm == null) {
+                FloatingActionButton(
+                    onClick = {
+                        if (!hasMicrophonePermission) {
+                            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            showVoiceDialog = true
+                            isListeningForVoice = true
+                            voiceStatus = "Listening..."
+                            
+                            coroutineScope.launch {
+                                voiceCommandHandler.startListening().collect { result ->
+                                    when (result) {
+                                        is VoiceResult.Listening -> {
+                                            voiceStatus = "🎤 Listening..."
+                                        }
+                                        is VoiceResult.Speaking -> {
+                                            voiceStatus = "🗣️ Speaking..."
+                                        }
+                                        is VoiceResult.Processing -> {
+                                            voiceStatus = "⚙️ Processing..."
+                                        }
+                                        is VoiceResult.Success -> {
+                                            isListeningForVoice = false
+                                            if (result.command != null) {
+                                                voiceStatus = "✅ Setting alarm..."
+                                                delay(500)
+                                                showVoiceDialog = false
+                                                
+                                                when (val outcome = viewModel.tryScheduleAlarm(
+                                                    triggerAtMillis = result.command.triggerAtMillis,
+                                                    label = result.command.label,
+                                                    gentleWake = true,
+                                                    cycles = result.command.cycles,
+                                                    plannedBedTimeMillis = null
+                                                )) {
+                                                    AlarmScheduleOutcome.MissingExactAlarmPermission -> 
+                                                        promptExactAlarmPermission(context)
+                                                    is AlarmScheduleOutcome.Error -> {
+                                                        snackbarHostState.showSnackbar(outcome.reason)
+                                                    }
+                                                    else -> {
+                                                        snackbarHostState.showSnackbar(
+                                                            "Voice alarm set: \"${result.recognizedText}\""
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                voiceStatus = "❌ Couldn't understand: \"${result.recognizedText}\""
+                                                delay(2000)
+                                                showVoiceDialog = false
+                                            }
+                                        }
+                                        is VoiceResult.Error -> {
+                                            isListeningForVoice = false
+                                            voiceStatus = "❌ ${result.message}"
+                                            delay(2000)
+                                            showVoiceDialog = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    containerColor = Color(0xFF5C6BC0),
+                    contentColor = Color.White
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Voice Command",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        }
     ) { padding ->
         Box(
             modifier = Modifier
@@ -228,12 +326,20 @@ fun SleepCalculatorScreen(
                         selectedOption = selectedBedTimeOption,
                         customBedTime = customBedTime,
                         suggestions = suggestions,
+                        selectedRecurringDays = selectedRecurringDays,
                         onOptionSelected = { selectedBedTimeOption = it },
                         onSetCustomTime = { showTimePicker = true },
                         onQuickTimeSelected = { minutes ->
                             val targetTime = LocalTime.now().plusMinutes(minutes.toLong())
                             customBedTime = targetTime
                             selectedBedTimeOption = BedTimeOption.Custom
+                        },
+                        onRecurringDayToggled = { day ->
+                            if (selectedRecurringDays.contains(day)) {
+                                selectedRecurringDays.remove(day)
+                            } else {
+                                selectedRecurringDays.add(day)
+                            }
                         },
                         onScheduleAlarm = { suggestion ->
                             val bedTimeMillis = when (selectedBedTimeOption) {
@@ -249,7 +355,8 @@ fun SleepCalculatorScreen(
                                 label = "Wake up",
                                 gentleWake = true,
                                 cycles = suggestion.cycles,
-                                plannedBedTimeMillis = bedTimeMillis
+                                plannedBedTimeMillis = bedTimeMillis,
+                                recurringDays = selectedRecurringDays.toList()
                             )) {
                                 AlarmScheduleOutcome.MissingExactAlarmPermission -> promptExactAlarmPermission(context)
                                 is AlarmScheduleOutcome.Error -> {
@@ -260,6 +367,7 @@ fun SleepCalculatorScreen(
                                 else -> {
                                     selectedBedTimeOption = BedTimeOption.SleepNow
                                     customBedTime = null
+                                    selectedRecurringDays.clear()
                                 }
                             }
                         }
@@ -326,6 +434,24 @@ fun SleepCalculatorScreen(
             }
         )
     }
+
+    if (showVoiceDialog) {
+        VoiceCommandDialog(
+            status = voiceStatus,
+            isListening = isListeningForVoice,
+            onDismiss = {
+                showVoiceDialog = false
+                isListeningForVoice = false
+                voiceCommandHandler.stopListening()
+            }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            voiceCommandHandler.stopListening()
+        }
+    }
 }
 
 @Composable
@@ -334,9 +460,11 @@ private fun SetAlarmCard(
     selectedOption: BedTimeOption,
     customBedTime: LocalTime?,
     suggestions: List<SleepSuggestion>,
+    selectedRecurringDays: List<Int>,
     onOptionSelected: (BedTimeOption) -> Unit,
     onSetCustomTime: () -> Unit,
     onQuickTimeSelected: (Int) -> Unit,
+    onRecurringDayToggled: (Int) -> Unit,
     onScheduleAlarm: (SleepSuggestion) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -421,6 +549,48 @@ private fun SetAlarmCard(
             if (selectedOption == BedTimeOption.Custom) {
                 TextButton(onClick = onSetCustomTime) {
                     Text("Change Time", fontSize = 12.sp, color = Color(0xFF5C6BC0))
+                }
+            }
+
+            // Recurring Days Selector
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Repeat On (optional)",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF3F51B5)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val daysOfWeek = listOf(
+                        1 to "M",
+                        2 to "T",
+                        3 to "W",
+                        4 to "T",
+                        5 to "F",
+                        6 to "S",
+                        7 to "S"
+                    )
+                    daysOfWeek.forEach { (dayNum, dayLabel) ->
+                        DayChip(
+                            label = dayLabel,
+                            isSelected = selectedRecurringDays.contains(dayNum),
+                            onClick = { onRecurringDayToggled(dayNum) }
+                        )
+                    }
+                }
+                if (selectedRecurringDays.isNotEmpty()) {
+                    Text(
+                        text = "✓ Alarm will repeat weekly",
+                        fontSize = 11.sp,
+                        color = Color(0xFF388E3C),
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
@@ -832,6 +1002,13 @@ private fun isNotificationPermissionGranted(context: android.content.Context): B
     ) == PackageManager.PERMISSION_GRANTED
 }
 
+private fun isMicrophonePermissionGranted(context: android.content.Context): Boolean {
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
 private fun formatLocalTime(localTime: LocalTime): String {
     val formatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
     val date = Date.from(
@@ -920,7 +1097,7 @@ private fun TimeUntilAlarmCard(triggerAtMillis: Long) {
                 // Progress bar
                 val progress = 1f - (timeUntil.toFloat() / (8 * 60 * 60 * 1000)) // Assuming 8h max
                 LinearProgressIndicator(
-                    progress = progress.coerceIn(0f, 1f),
+                    progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp),
@@ -1056,3 +1233,109 @@ private data class CreateAlarmDialogState(
     val cycles: Int?,
     val plannedBedTimeMillis: Long?
 )
+
+@Composable
+private fun VoiceCommandDialog(
+    status: String,
+    isListening: Boolean,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = null,
+                    tint = if (isListening) Color(0xFFD32F2F) else Color(0xFF5C6BC0),
+                    modifier = Modifier.size(24.dp)
+                )
+                Text("Voice Command")
+            }
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                // Animated microphone icon
+                if (isListening) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .background(Color(0xFFD32F2F).copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = null,
+                            tint = Color(0xFFD32F2F),
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = status,
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color.Black
+                )
+
+                if (isListening) {
+                    Text(
+                        text = "Try saying:\n\"Set alarm for 7 AM\"\n\"Wake me in 30 minutes\"\n\"Alarm at 10:30 PM\"",
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        color = Color.Gray,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DayChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(if (isSelected) Color(0xFF5C6BC0) else Color.White)
+            .border(
+                width = 1.dp,
+                color = if (isSelected) Color(0xFF5C6BC0) else Color.Gray.copy(alpha = 0.3f),
+                shape = CircleShape
+            )
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) Color.White else Color.Gray
+        )
+    }
+}

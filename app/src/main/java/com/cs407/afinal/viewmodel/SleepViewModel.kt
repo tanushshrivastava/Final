@@ -91,12 +91,13 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
         label: String,
         gentleWake: Boolean,
         cycles: Int?,
-        plannedBedTimeMillis: Long?
+        plannedBedTimeMillis: Long?,
+        recurringDays: List<Int> = emptyList()
     ): AlarmScheduleOutcome {
         if (!alarmScheduler.canScheduleExactAlarms()) {
             return AlarmScheduleOutcome.MissingExactAlarmPermission
         }
-        if (triggerAtMillis <= System.currentTimeMillis()) {
+        if (recurringDays.isEmpty() && triggerAtMillis <= System.currentTimeMillis()) {
             return AlarmScheduleOutcome.Error("Selected time is in the past. Please choose a future time.")
         }
 
@@ -109,7 +110,8 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
             gentleWake = gentleWake,
             createdAtMillis = System.currentTimeMillis(),
             plannedBedTimeMillis = plannedBedTimeMillis,
-            targetCycles = cycles
+            targetCycles = cycles,
+            recurringDays = recurringDays
         )
 
         viewModelScope.launch(Dispatchers.IO) {
