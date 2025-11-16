@@ -1,9 +1,11 @@
 package com.cs407.afinal
 
+import android.Manifest
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.cs407.afinal.alarm.AlarmConstants
@@ -12,6 +14,7 @@ import com.cs407.afinal.data.AlarmPreferences
 
 class AlarmReceiver : BroadcastReceiver() {
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun onReceive(context: Context, intent: Intent) {
         val alarmId = intent.getIntExtra(AlarmConstants.EXTRA_ALARM_ID, -1)
         val label = intent.getStringExtra(AlarmConstants.EXTRA_ALARM_LABEL) ?: "Alarm"
