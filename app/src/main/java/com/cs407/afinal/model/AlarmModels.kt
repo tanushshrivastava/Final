@@ -12,7 +12,8 @@ data class AlarmItem(
     val createdAtMillis: Long,
     val plannedBedTimeMillis: Long? = null,
     val targetCycles: Int? = null,
-    val recurringDays: List<Int> = emptyList() // 1=Monday, 2=Tuesday, ..., 7=Sunday; empty = one-time alarm
+    val recurringDays: List<Int> = emptyList(), // 1=Monday, 2=Tuesday, ..., 7=Sunday; empty = one-time alarm
+    val isAutoSet: Boolean = false // true if alarm was auto-set by inactivity monitor
 )
 
 @Serializable

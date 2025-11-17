@@ -87,11 +87,40 @@ class AlarmPreferences(context: Context) {
         saveAlarms(current.sortedBy { it.triggerAtMillis })
     }
 
+    fun isAutoAlarmEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_ALARM_ENABLED, false)
+
+    fun setAutoAlarmEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_AUTO_ALARM_ENABLED, enabled) }
+    }
+
+    fun getAutoAlarmTriggerTime(): Pair<Int, Int> {
+        val hour = prefs.getInt(KEY_AUTO_ALARM_HOUR, 22)
+        val minute = prefs.getInt(KEY_AUTO_ALARM_MINUTE, 30)
+        return hour to minute
+    }
+
+    fun setAutoAlarmTriggerTime(hour: Int, minute: Int) {
+        prefs.edit {
+            putInt(KEY_AUTO_ALARM_HOUR, hour)
+            putInt(KEY_AUTO_ALARM_MINUTE, minute)
+        }
+    }
+
+    fun getAutoAlarmInactivityMinutes(): Int = prefs.getInt(KEY_AUTO_ALARM_INACTIVITY_MINUTES, 15)
+
+    fun setAutoAlarmInactivityMinutes(minutes: Int) {
+        prefs.edit { putInt(KEY_AUTO_ALARM_INACTIVITY_MINUTES, minutes) }
+    }
+
     private companion object {
         private const val PREFS_NAME = "AlarmApp"
         private const val KEY_ALARMS = "alarms_v2"
         private const val KEY_HISTORY = "sleep_history"
         private const val KEY_NEXT_ALARM_ID = "next_alarm_id"
+        private const val KEY_AUTO_ALARM_ENABLED = "auto_alarm_enabled"
+        private const val KEY_AUTO_ALARM_HOUR = "auto_alarm_hour"
+        private const val KEY_AUTO_ALARM_MINUTE = "auto_alarm_minute"
+        private const val KEY_AUTO_ALARM_INACTIVITY_MINUTES = "auto_alarm_inactivity_minutes"
         private const val MAX_HISTORY_ENTRIES = 20
     }
 }

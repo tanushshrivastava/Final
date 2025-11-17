@@ -14,7 +14,8 @@ fun AlarmItem.toFirestoreMap(): Map<String, Any?> =
         "createdAtMillis" to createdAtMillis,
         "plannedBedTimeMillis" to plannedBedTimeMillis,
         "targetCycles" to targetCycles,
-        "recurringDays" to recurringDays
+        "recurringDays" to recurringDays,
+        "isAutoSet" to isAutoSet
     )
 
 fun SleepHistoryEntry.toFirestoreMap(): Map<String, Any?> =
@@ -36,6 +37,7 @@ fun DocumentSnapshot.toAlarmItem(): AlarmItem? {
     val plannedBedTimeMillis = getLong("plannedBedTimeMillis")
     val targetCycles = getLong("targetCycles")?.toInt()
     val id = getLong("id")?.toInt() ?: id.toIntOrNull() ?: return null
+    val isAutoSet = getBoolean("isAutoSet") ?: false
     @Suppress("UNCHECKED_CAST")
     val recurringDays = (get("recurringDays") as? List<Long>)?.map { it.toInt() } ?: emptyList()
     return AlarmItem(
@@ -47,7 +49,8 @@ fun DocumentSnapshot.toAlarmItem(): AlarmItem? {
         createdAtMillis = createdAtMillis,
         plannedBedTimeMillis = plannedBedTimeMillis,
         targetCycles = targetCycles,
-        recurringDays = recurringDays
+        recurringDays = recurringDays,
+        isAutoSet = isAutoSet
     )
 }
 
