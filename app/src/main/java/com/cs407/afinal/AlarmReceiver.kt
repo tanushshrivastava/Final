@@ -1,27 +1,40 @@
 package com.cs407.afinal
 
+import android.Manifest
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.cs407.afinal.alarm.AlarmConstants
+import com.cs407.afinal.alarm.AlarmScheduler
 import com.cs407.afinal.data.AlarmPreferences
 
 class AlarmReceiver : BroadcastReceiver() {
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun onReceive(context: Context, intent: Intent) {
         val alarmId = intent.getIntExtra(AlarmConstants.EXTRA_ALARM_ID, -1)
         val label = intent.getStringExtra(AlarmConstants.EXTRA_ALARM_LABEL) ?: "Alarm"
         val triggerAtMillis = intent.getLongExtra(AlarmConstants.EXTRA_ALARM_TIME, System.currentTimeMillis())
         val gentleWake = intent.getBooleanExtra(AlarmConstants.EXTRA_GENTLE_WAKE, true)
         val plannedBedTime = intent.getLongExtra(AlarmConstants.EXTRA_PLANNED_BEDTIME, -1)
+        val isRecurring = intent.getBooleanExtra(AlarmConstants.EXTRA_IS_RECURRING, false)
+        val recurringDays = intent.getIntegerArrayListExtra(AlarmConstants.EXTRA_RECURRING_DAYS) ?: arrayListOf()
 
         val alarmPreferences = AlarmPreferences(context)
         val currentAlarms = alarmPreferences.loadAlarms()
-        currentAlarms.firstOrNull { it.id == alarmId }?.let {
-            alarmPreferences.upsertAlarm(it.copy(isEnabled = false))
+        currentAlarms.firstOrNull { it.id == alarmId }?.let { alarm ->
+            if (isRecurring && recurringDays.isNotEmpty()) {
+                // For recurring alarms, reschedule the next occurrence
+                val alarmScheduler = AlarmScheduler(context)
+                alarmScheduler.schedule(alarm)
+            } else {
+                // For one-time alarms, disable after firing
+                alarmPreferences.upsertAlarm(alarm.copy(isEnabled = false))
+            }
         }
 
         val alarmActivityIntent = Intent(context, AlarmActivity::class.java).apply {
