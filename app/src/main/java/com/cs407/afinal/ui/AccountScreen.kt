@@ -1,3 +1,9 @@
+/**
+ * This file contains the composables for the user account screen.
+ * It includes UI for both authentication (sign-in/sign-up) and for viewing/managing
+ * account settings when the user is signed in.
+ * The screen's state is managed by [com.cs407.afinal.viewmodel.AccountViewModel].
+ */
 package com.cs407.afinal.ui
 
 import android.app.TimePickerDialog
@@ -5,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,52 +51,84 @@ import com.cs407.afinal.viewmodel.AccountViewModel
 import com.cs407.afinal.viewmodel.AuthMode
 import java.util.Locale
 
+/**
+ * The main composable for the account screen.
+ *
+ * This screen serves two primary purposes:
+ * 1.  **Authentication:** Allows users to sign in or create a new account.
+ * 2.  **Account Management:** Once signed in, it displays user information and provides
+ *     options to manage settings, such as the "Auto Sleep Alarm" feature.
+ *
+ * It observes the [AccountUiState] from the [AccountViewModel] to determine which UI to display
+ * and to show feedback messages (errors or successes) in a Snackbar.
+ *
+ * @param modifier The modifier to be applied to the layout.
+ * @param viewModel The [AccountViewModel] instance that holds the business logic and state for this screen.
+ */
 @Composable
 fun AccountScreen(
     modifier: Modifier = Modifier,
     viewModel: AccountViewModel = viewModel()
 ) {
+    // Collect the UI state from the ViewModel in a lifecycle-aware manner.
+    // This ensures that the UI always reflects the latest state.
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Extract error and success messages for easier access.
     val errorMessage = uiState.errorMessage
     val successMessage = uiState.successMessage
+
+    // Remember a SnackbarHostState to control the display of Snackbars.
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // A LaunchedEffect is used to show a Snackbar when an error or success message is available.
+    // It runs a side-effect (showing a snackbar) in a coroutine scope tied to the composable's lifecycle.
+    // The key parameters `errorMessage` and `successMessage` ensure this effect reruns if they change.
     LaunchedEffect(errorMessage, successMessage) {
         when {
+            // If there's an error message, show it in the snackbar.
             errorMessage != null -> {
                 snackbarHostState.showSnackbar(errorMessage)
+                // Consume the message in the ViewModel to prevent it from being shown again on recomposition.
                 viewModel.consumeMessages()
             }
 
+            // If there's a success message, show it in the snackbar.
             successMessage != null -> {
                 snackbarHostState.showSnackbar(successMessage)
+                // Consume the message.
                 viewModel.consumeMessages()
             }
         }
     }
 
+    // Scaffold provides a standard layout structure (like app bars, floating action buttons, etc.).
+    // Here, we use it to host the Snackbar.
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
+        // Check if a user is currently signed in by looking at their email in the UI state.
         val currentUserEmail = uiState.currentUserEmail
         if (!currentUserEmail.isNullOrBlank()) {
+            // If the user is signed in, display the content for authenticated users.
             SignedInContent(
                 email = currentUserEmail,
-                onSignOut = viewModel::signOut,
+                onSignOut = viewModel::signOut, // Pass the signOut function from the ViewModel.
                 viewModel = viewModel,
                 modifier = Modifier
-                    .padding(padding)
+                    .padding(padding) // Apply padding from the Scaffold.
                     .fillMaxSize()
             )
         } else {
+            // If no user is signed in, display the authentication form (sign-in or sign-up).
             AuthForm(
                 uiState = uiState,
                 onEmailChange = viewModel::onEmailChanged,
                 onPasswordChange = viewModel::onPasswordChanged,
                 onConfirmPasswordChange = viewModel::onConfirmPasswordChanged,
                 onSubmit = viewModel::submit,
-                onToggleMode = viewModel::toggleMode,
+                onToggleMode = viewModel::toggleMode, // Function to switch between sign-in/sign-up.
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
@@ -100,6 +137,21 @@ fun AccountScreen(
     }
 }
 
+/**
+ * A composable that displays the authentication form for signing in or signing up.
+ *
+ * This form is "stateless" because it doesn't manage its own state. Instead, it receives the
+ * current state ([AccountUiState]) and callbacks (e.g., `onEmailChange`) from its parent.
+ * This makes the component highly reusable and easy to test.
+ *
+ * @param uiState The current state of the authentication form (e.g., email, password, loading status).
+ * @param onEmailChange Callback invoked when the user types in the email field.
+ * @param onPasswordChange Callback invoked when the user types in the password field.
+ * @param onConfirmPasswordChange Callback invoked when the user types in the confirm password field (for sign-up).
+ * @param onSubmit Callback invoked when the user clicks the primary action button (Sign In or Create Account).
+ * @param onToggleMode Callback invoked when the user clicks the button to switch between sign-in and sign-up modes.
+ * @param modifier The modifier to be applied to the layout.
+ */
 @Composable
 private fun AuthForm(
     uiState: AccountUiState,
@@ -110,13 +162,15 @@ private fun AuthForm(
     onToggleMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // A Column to arrange the UI elements vertically.
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.SpaceBetween // Pushes content to the top and bottom.
     ) {
+        // Top section: Title and introductory text.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -134,11 +188,13 @@ private fun AuthForm(
             )
         }
 
+        // Middle section: Input fields and action buttons.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
+            // Email input field.
             OutlinedTextField(
                 value = uiState.email,
                 onValueChange = onEmailChange,
@@ -146,14 +202,16 @@ private fun AuthForm(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            // Password input field.
             OutlinedTextField(
                 value = uiState.password,
                 onValueChange = onPasswordChange,
                 label = { Text("Password") },
                 singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
+                visualTransformation = PasswordVisualTransformation(), // Hides the password text.
                 modifier = Modifier.fillMaxWidth()
             )
+            // "Confirm Password" field, shown only in SIGN_UP mode.
             if (uiState.mode == AuthMode.SIGN_UP) {
                 OutlinedTextField(
                     value = uiState.confirmPassword,
@@ -164,11 +222,13 @@ private fun AuthForm(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            // Submit button (Sign In or Create Account).
             Button(
                 onClick = onSubmit,
-                enabled = !uiState.loading,
+                enabled = !uiState.loading, // Disable button while a network request is in progress.
                 modifier = Modifier.fillMaxWidth()
             ) {
+                // Show a loading indicator inside the button if `uiState.loading` is true.
                 if (uiState.loading) {
                     CircularProgressIndicator(
                         color = MaterialTheme.colorScheme.onPrimary,
@@ -178,9 +238,11 @@ private fun AuthForm(
                             .size(18.dp)
                     )
                 } else {
+                    // Otherwise, show the appropriate text.
                     Text(if (uiState.mode == AuthMode.SIGN_IN) "Sign in" else "Create account")
                 }
             }
+            // Text button to toggle between Sign In and Sign Up modes.
             TextButton(onClick = onToggleMode) {
                 Text(
                     if (uiState.mode == AuthMode.SIGN_IN) "Need an account? Sign up"
@@ -191,6 +253,17 @@ private fun AuthForm(
     }
 }
 
+/**
+ * A composable that displays the content for a signed-in user.
+ *
+ * This includes the user's email, a sign-out button, and settings for the
+ * "Auto Sleep Alarm" feature.
+ *
+ * @param email The email of the currently signed-in user.
+ * @param onSignOut Callback invoked when the user clicks the sign-out button.
+ * @param modifier The modifier to be applied to the layout.
+ * @param viewModel The [AccountViewModel] instance, used here to manage the state of the settings.
+ */
 @Composable
 private fun SignedInContent(
     email: String,
@@ -198,13 +271,16 @@ private fun SignedInContent(
     modifier: Modifier = Modifier,
     viewModel: AccountViewModel
 ) {
+    // Collect the UI state to get the latest settings values.
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Get the current context, which is needed for showing dialogs.
     val context = LocalContext.current
 
     Column(
         modifier = modifier.padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
+        // Top section: Welcome message and user email.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -226,6 +302,7 @@ private fun SignedInContent(
             )
         }
 
+        // Settings Card for "Auto Sleep Alarm".
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -242,7 +319,9 @@ private fun SignedInContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                HorizontalDivider()
+                HorizontalDivider() // A visual separator.
+
+                // Row for the "Enable Auto Alarm" switch.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -251,21 +330,24 @@ private fun SignedInContent(
                     Text("Enable Auto Alarm")
                     Switch(
                         checked = uiState.autoAlarmEnabled,
-                        onCheckedChange = { viewModel.setAutoAlarmEnabled(it) }
+                        onCheckedChange = { viewModel.setAutoAlarmEnabled(it) } // Update ViewModel on change.
                     )
                 }
+
+                // Row for setting the "Trigger Time".
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
+                        .clickable { // The whole row is clickable to open the time picker.
                             TimePickerDialog(
                                 context,
                                 { _, hour, minute ->
+                                    // When a time is selected, update the ViewModel.
                                     viewModel.setAutoAlarmTime(hour, minute)
                                 },
                                 uiState.autoAlarmHour,
                                 uiState.autoAlarmMinute,
-                                false
+                                false // Use 24-hour format internally, but display in 12-hour.
                             ).show()
                         }
                         .padding(vertical = 8.dp),
@@ -273,6 +355,7 @@ private fun SignedInContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Trigger Time")
+                    // Display the formatted time.
                     Text(
                         text = String.format(
                             Locale.getDefault(),
@@ -285,21 +368,34 @@ private fun SignedInContent(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+
+                // Row for setting the "Inactivity Duration".
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            android.app.AlertDialog.Builder(context)
+                        .clickable { // The whole row is clickable to open the selection dialog.
+                            android.app.AlertDialog
+                                .Builder(context)
                                 .setTitle("Inactivity Duration")
-                                .setItems(arrayOf("1 minute (test)", "5 minutes", "15 minutes", "30 minutes", "1 hour")) { _, which ->
+                                .setItems(
+                                    arrayOf(
+                                        "1 minute (test)",
+                                        "5 minutes",
+                                        "15 minutes",
+                                        "30 minutes",
+                                        "1 hour"
+                                    )
+                                ) { _, which ->
+                                    // Map the selected index to the corresponding minute value.
                                     val minutes = when (which) {
                                         0 -> 1
                                         1 -> 5
                                         2 -> 15
                                         3 -> 30
                                         4 -> 60
-                                        else -> 15
+                                        else -> 15 // Default value.
                                     }
+                                    // Update the ViewModel with the selected duration.
                                     viewModel.setAutoAlarmInactivityMinutes(minutes)
                                 }
                                 .show()
@@ -310,92 +406,20 @@ private fun SignedInContent(
                 ) {
                     Text("Inactivity Duration")
                     Text(
-                        text = if (uiState.autoAlarmInactivityMinutes >= 60) 
-                            "${uiState.autoAlarmInactivityMinutes / 60}h" 
-                        else 
-                            "${uiState.autoAlarmInactivityMinutes}m",
+                        text = "${uiState.autoAlarmInactivityMinutes} minutes",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                if (uiState.autoAlarmEnabled) {
-                    HorizontalDivider()
-                    
-                    // Status indicator
-                    var statusText by remember { mutableStateOf("Checking status...") }
-                    var statusColor by remember { mutableStateOf(Color(0xFF757575)) }
-                    
-                    LaunchedEffect(Unit) {
-                        while (true) {
-                            val isServiceRunning = isServiceRunning(context, "com.cs407.afinal.InactivityMonitorService")
-                            val (triggerHour, triggerMinute) = viewModel.uiState.value.let { it.autoAlarmHour to it.autoAlarmMinute }
-                            val now = java.util.Calendar.getInstance()
-                            val currentHour = now.get(java.util.Calendar.HOUR_OF_DAY)
-                            val currentMinute = now.get(java.util.Calendar.MINUTE)
-                            val currentTimeInMinutes = currentHour * 60 + currentMinute
-                            val triggerTimeInMinutes = triggerHour * 60 + triggerMinute
-                            val shouldMonitor = currentTimeInMinutes >= triggerTimeInMinutes || currentTimeInMinutes < 6 * 60
-                            
-                            statusText = when {
-                                !isServiceRunning -> "Service not running"
-                                !shouldMonitor -> "Waiting until ${String.format("%02d:%02d", triggerHour, triggerMinute)}"
-                                else -> "Monitoring active (${uiState.autoAlarmInactivityMinutes}m threshold)"
-                            }
-                            
-                            statusColor = when {
-                                !isServiceRunning -> Color(0xFFD32F2F)
-                                !shouldMonitor -> Color(0xFF757575)
-                                else -> Color(0xFF4CAF50)
-                            }
-                            
-                            kotlinx.coroutines.delay(2000)
-                        }
-                    }
-                    
-                    Text(
-                        text = statusText,
-                        fontSize = 12.sp,
-                        color = statusColor,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                    
-                    Button(
-                        onClick = {
-                            val sleepCycleDurationMs = 90 * 60 * 1000L
-                            val wakeUpTime = System.currentTimeMillis() + (6 * sleepCycleDurationMs)
-                            android.widget.Toast.makeText(
-                                context,
-                                "Test: Auto-alarm would set for ${java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(wakeUpTime)}",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Text("Test (Show What Time Would Set)", fontSize = 12.sp)
-                    }
-                }
             }
         }
-
+        // Sign-out button at the bottom.
         Button(
             onClick = onSignOut,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
         ) {
-            Text("Sign out")
+            Text("Sign Out")
         }
     }
-}
-
-private fun isServiceRunning(context: android.content.Context, serviceClassName: String): Boolean {
-    val manager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-    @Suppress("DEPRECATION")
-    for (service in manager.getRunningServices(Integer.MAX_VALUE)) {
-        if (serviceClassName == service.service.className) {
-            return true
-        }
-    }
-    return false
 }
