@@ -48,6 +48,14 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
         auth.addAuthStateListener(authListener)
         refreshState()
         handleAuthChange(auth.currentUser)
+        
+        // Listen for auto-alarm creation broadcasts
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(3000) // Refresh every 3 seconds
+                refreshState()
+            }
+        }
     }
 
     override fun onCleared() {
