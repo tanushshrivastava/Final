@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.util.Locale
+import android.util.Log
 
 /**
  * Handles voice command processing for setting alarms
@@ -25,6 +26,9 @@ class VoiceCommandHandler(private val context: Context) {
      * Returns a Flow that emits recognition results
      */
     fun startListening(): Flow<VoiceResult> = callbackFlow {
+        var retryCount = 0
+        lateinit var listenIntent: Intent
+        var lastPartial: String? = null
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             trySend(VoiceResult.Error("Speech recognition not available"))
             close()
@@ -43,6 +47,7 @@ class VoiceCommandHandler(private val context: Context) {
             }
 
             override fun onRmsChanged(rmsdB: Float) {
+                Log.d("VoiceDebug", "RMS = $rmsdB")
                 // Audio level changed - this confirms microphone is working
                 // rmsdB ranges from 0 to 10+ (louder = higher value)
                 if (rmsdB > 0) {
@@ -60,6 +65,13 @@ class VoiceCommandHandler(private val context: Context) {
             }
 
             override fun onError(error: Int) {
+                Log.w("VoiceDebug", "Recognizer error code = $error")
+                if (error == SpeechRecognizer.ERROR_NO_MATCH && retryCount < 2) {
+                    retryCount++
+                    speechRecognizer?.cancel()
+                    speechRecognizer?.startListening(listenIntent)
+                    return
+                }
                 val errorMessage = when (error) {
                     SpeechRecognizer.ERROR_AUDIO -> "❌ Audio recording error\n\nCheck if another app is using the microphone"
                     SpeechRecognizer.ERROR_CLIENT -> "❌ Client error\n\nTry again"
@@ -77,8 +89,12 @@ class VoiceCommandHandler(private val context: Context) {
             }
 
             override fun onResults(results: Bundle?) {
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (matches != null && matches.isNotEmpty()) {
+                var matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if ((matches == null || matches.isEmpty()) && lastPartial != null) {
+                    matches = arrayListOf(lastPartial!!)
+                }
+                Log.d("VoiceDebug", "Final results = ${matches?.joinToString()}")
+                if (!matches.isNullOrEmpty()) {
                     val command = matches[0]
                     val parsedCommand = parseVoiceCommand(command)
                     trySend(VoiceResult.Success(command, parsedCommand))
@@ -89,10 +105,10 @@ class VoiceCommandHandler(private val context: Context) {
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
-                // Show partial results as user speaks
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (matches != null && matches.isNotEmpty()) {
-                    // Could update UI with partial text here if needed
+                Log.d("VoiceDebug", "Partial = ${matches?.joinToString()}")
+                if (!matches.isNullOrEmpty()) {
+                    lastPartial = matches[0]
                 }
             }
 
@@ -103,20 +119,20 @@ class VoiceCommandHandler(private val context: Context) {
 
         speechRecognizer?.setRecognitionListener(recognitionListener)
 
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        listenIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Say alarm time (e.g., '7 AM' or '30 minutes')")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             // Relaxed settings for better microphone pickup
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
         }
 
-        speechRecognizer?.startListening(intent)
+        speechRecognizer?.startListening(listenIntent)
 
         awaitClose {
             speechRecognizer?.destroy()
