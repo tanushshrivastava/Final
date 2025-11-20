@@ -219,7 +219,11 @@ fun SleepCalculatorScreen(
                                 voiceCommandHandler.startListening().collect { result ->
                                     when (result) {
                                         is VoiceResult.Listening -> {
-                                            voiceStatus = "🎤 Listening..."
+                                            voiceStatus = "🎤 Listening... Speak now!"
+                                        }
+                                        is VoiceResult.AudioDetected -> {
+                                            // Microphone is picking up audio
+                                            voiceStatus = "🎤 Audio detected! Keep speaking..."
                                         }
                                         is VoiceResult.Speaking -> {
                                             voiceStatus = "🗣️ Speaking..."
@@ -253,15 +257,15 @@ fun SleepCalculatorScreen(
                                                     }
                                                 }
                                             } else {
-                                                voiceStatus = "❌ Couldn't understand: \"${result.recognizedText}\""
-                                                delay(2000)
+                                                voiceStatus = "❌ Couldn't parse command.\nI heard: \"${result.recognizedText}\"\n\nTry: '7 AM' or '30 minutes'"
+                                                delay(5000)
                                                 showVoiceDialog = false
                                             }
                                         }
                                         is VoiceResult.Error -> {
                                             isListeningForVoice = false
                                             voiceStatus = "❌ ${result.message}"
-                                            delay(2000)
+                                            delay(7000)
                                             showVoiceDialog = false
                                         }
                                     }
