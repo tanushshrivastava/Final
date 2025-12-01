@@ -2,7 +2,7 @@
  * This file contains the AlarmReceiver, a BroadcastReceiver responsible for handling
  * alarm intents sent by the Android system's AlarmManager.
  */
-package com.cs407.afinal
+package com.cs407.afinal.alarm
 
 import android.Manifest
 import android.app.PendingIntent
@@ -12,9 +12,11 @@ import android.content.Intent
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.cs407.afinal.alarm.AlarmConstants
-import com.cs407.afinal.alarm.AlarmScheduler
-import com.cs407.afinal.data.AlarmPreferences
+import com.cs407.afinal.MainActivity
+import com.cs407.afinal.R
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * A BroadcastReceiver that listens for alarm clock broadcasts.
@@ -44,17 +46,18 @@ class AlarmReceiver : BroadcastReceiver() {
         val plannedBedTime = intent.getLongExtra(AlarmConstants.EXTRA_PLANNED_BEDTIME, -1)
         val isRecurring = intent.getBooleanExtra(AlarmConstants.EXTRA_IS_RECURRING, false)
 
-        val alarmPreferences = AlarmPreferences(context)
-        val currentAlarms = alarmPreferences.loadAlarms()
+        // CHANGED: Use AlarmManager instead of AlarmPreferences
+        val alarmManager = AlarmManager(context)
+        val currentAlarms = alarmManager.loadAlarms()
+
         // Find the specific alarm that is ringing from the stored list.
         currentAlarms.firstOrNull { it.id == alarmId }?.let { alarm ->
             if (isRecurring) {
                 // For recurring alarms, we need to calculate and schedule the next occurrence.
-                val alarmScheduler = AlarmScheduler(context)
-                alarmScheduler.schedule(alarm) // The scheduler will find the next valid day and set a new alarm.
+                alarmManager.scheduleAlarm(alarm) // CHANGED: use scheduleAlarm() instead of schedule()
             } else {
                 // For one-time alarms, we simply mark them as disabled so they don't ring again.
-                alarmPreferences.upsertAlarm(alarm.copy(isEnabled = false))
+                alarmManager.upsertAlarm(alarm.copy(isEnabled = false))
             }
         }
 
@@ -63,7 +66,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Create an intent to launch the AlarmActivity, which is the full-screen UI for the ringing alarm.
         val alarmActivityIntent = Intent(context, AlarmActivity::class.java).apply {
             // Use NEW_TASK because we are starting an activity from a broadcast receiver context.
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             // Pass all the alarm details to the activity so it can display them.
             putExtra(AlarmConstants.EXTRA_ALARM_ID, alarmId)
             putExtra(AlarmConstants.EXTRA_ALARM_LABEL, label)
@@ -85,7 +88,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // --- Build and display a high-priority notification ---
         // This is crucial for alarms, as it's the primary way to get the user's attention.
-        val notification = NotificationCompat.Builder(context, MainActivity.ALARM_CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, MainActivity.Companion.ALARM_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(label)
             .setContentText("Alarm for ${formatTime(triggerAtMillis)}")
@@ -110,7 +113,7 @@ class AlarmReceiver : BroadcastReceiver() {
      * @return A formatted time string.
      */
     private fun formatTime(millis: Long): String {
-        val formatter = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-        return formatter.format(java.util.Date(millis))
+        val formatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
+        return formatter.format(Date(millis))
     }
 }

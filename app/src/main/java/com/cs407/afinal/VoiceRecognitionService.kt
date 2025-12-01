@@ -1,4 +1,3 @@
-
 package com.cs407.afinal
 
 import android.app.Service
@@ -7,33 +6,24 @@ import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
-import com.cs407.afinal.alarm.AlarmScheduler
-import com.cs407.afinal.data.AlarmPreferences
-import com.cs407.afinal.model.AlarmItem
+import com.cs407.afinal.alarm.AlarmItem
+import com.cs407.afinal.alarm.AlarmManager
 import com.cs407.afinal.util.AlarmCommand
 import com.cs407.afinal.util.VoiceCommandHandler
 import com.cs407.afinal.util.VoiceResult
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 
 class VoiceRecognitionService : Service() {
 
     private lateinit var voiceCommandHandler: VoiceCommandHandler
-    private lateinit var alarmScheduler: AlarmScheduler
-    private lateinit var alarmPreferences: AlarmPreferences
+    private lateinit var alarmManager: AlarmManager
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var listeningJob: kotlinx.coroutines.Job? = null
+    private var listeningJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
         voiceCommandHandler = VoiceCommandHandler(this)
-        alarmScheduler = AlarmScheduler(this)
-        alarmPreferences = AlarmPreferences(this)
+        alarmManager = AlarmManager(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -42,9 +32,7 @@ class VoiceRecognitionService : Service() {
     }
 
     private fun startContinuousListening() {
-        if (listeningJob?.isActive == true) {
-            return
-        }
+        if (listeningJob?.isActive == true) return
 
         listeningJob = serviceScope.launch {
             while (isActive) {
@@ -52,34 +40,34 @@ class VoiceRecognitionService : Service() {
                 voiceCommandHandler.startListening().collect { result ->
                     when (result) {
                         is VoiceResult.Success -> {
-                            Log.i("VoiceRecognitionService", "Voice recognized: '${'$'}{result.recognizedText}'")
+                            Log.i("VoiceRecognitionService", "Voice recognized: '${result.recognizedText}'")
                             resetInactivityMonitor()
 
                             if (result.command != null) {
                                 handleAlarmCommand(result.command)
                             } else {
-                                Toast.makeText(applicationContext, "Heard: \"${'$'}{result.recognizedText}\"", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(applicationContext, "Heard: \"${result.recognizedText}\"", Toast.LENGTH_SHORT).show()
                             }
                         }
                         is VoiceResult.Error -> {
-                            Log.e("VoiceRecognitionService", "Recognition error: ${'$'}{result.message}")
+                            Log.e("VoiceRecognitionService", "Recognition error: ${result.message}")
                         }
-                        else -> { /* Handle other states if needed */ }
+                        else -> {}
                     }
                 }
-                delay(500) // Brief pause before restarting listener
+                delay(500) // Brief pause before restarting
             }
         }
     }
 
     private fun handleAlarmCommand(command: AlarmCommand) {
-        if (!alarmScheduler.canScheduleExactAlarms()) {
-            Log.w("VoiceRecognitionService", "Cannot schedule exact alarms. Missing permission.")
-            Toast.makeText(this, "Permission to set exact alarms is required.", Toast.LENGTH_LONG).show()
+        if (!alarmManager.canScheduleExactAlarms()) {
+            Log.w("VoiceRecognitionService", "Missing exact alarm permission.")
+            Toast.makeText(this, "Exact alarm permission needed.", Toast.LENGTH_LONG).show()
             return
         }
 
-        val alarmId = alarmPreferences.nextAlarmId()
+        val alarmId = alarmManager.nextAlarmId()
         val newAlarm = AlarmItem(
             id = alarmId,
             triggerAtMillis = command.triggerAtMillis,
@@ -87,15 +75,14 @@ class VoiceRecognitionService : Service() {
             isEnabled = true,
             gentleWake = true,
             createdAtMillis = System.currentTimeMillis(),
-            plannedBedTimeMillis = null,
-            targetCycles = command.cycles,
-            isAutoSet = false,
-            recurringDays = emptyList()
+            isAutoSet = false
         )
-        alarmPreferences.upsertAlarm(newAlarm)
-        alarmScheduler.schedule(newAlarm)
-        Log.i("VoiceRecognitionService", "Scheduled alarm from voice command for ${'$'}{newAlarm.triggerAtMillis}.")
-        Toast.makeText(this, "Alarm set: ${'$'}{newAlarm.label}", Toast.LENGTH_SHORT).show()
+        
+        alarmManager.upsertAlarm(newAlarm)
+        alarmManager.scheduleAlarm(newAlarm)
+        
+        Log.i("VoiceRecognitionService", "Scheduled alarm from voice command for ${newAlarm.triggerAtMillis}.")
+        Toast.makeText(this, "Alarm set: ${newAlarm.label}", Toast.LENGTH_SHORT).show()
     }
 
     private fun resetInactivityMonitor() {
@@ -112,7 +99,5 @@ class VoiceRecognitionService : Service() {
         serviceScope.cancel()
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 }
