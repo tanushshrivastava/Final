@@ -18,7 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import com.cs407.afinal.data.AlarmPreferences
+import com.cs407.afinal.alarm.AlarmManager  // CHANGED: from data.AlarmPreferences
 import com.cs407.afinal.ui.SmartSleepApp
 import com.cs407.afinal.ui.theme.FinalTheme
 
@@ -81,8 +81,8 @@ class MainActivity : ComponentActivity() {
      */
     private fun startInactivityMonitorIfEnabled() {
         // Access user preferences to see if the auto-alarm feature is turned on.
-        val prefs = AlarmPreferences(this)
-        if (prefs.isAutoAlarmEnabled()) {
+        val alarmManager = AlarmManager(this)  // CHANGED: use AlarmManager instead of AlarmPreferences
+        if (alarmManager.isAutoAlarmEnabled()) {
             // If enabled, create an intent for the service.
             val intent = Intent(this, InactivityMonitorService::class.java)
             // Start the service as a foreground service to ensure it continues running even if the app is in the background.

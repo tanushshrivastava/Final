@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,23 +46,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -91,18 +84,18 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.abs
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.cs407.afinal.model.AlarmItem
-import com.cs407.afinal.model.SleepMode
-import com.cs407.afinal.model.SleepSuggestion
-import com.cs407.afinal.util.SleepCycleCalculator
+import com.cs407.afinal.alarm.AlarmItem
+import com.cs407.afinal.sleep.SleepMode
+import com.cs407.afinal.sleep.SleepSuggestion
+import com.cs407.afinal.sleep.SleepSuggestionType
+import com.cs407.afinal.sleep.SleepCalculator
 import com.cs407.afinal.util.VoiceCommandHandler
 import com.cs407.afinal.util.VoiceResult
-import com.cs407.afinal.viewmodel.AlarmScheduleOutcome
-import com.cs407.afinal.viewmodel.SleepViewModel
+import com.cs407.afinal.alarm.AlarmScheduleOutcome
+import com.cs407.afinal.sleep.SleepViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -119,7 +112,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepCalculatorScreen(
-    modifier: Modifier = Modifier,
+    modifier: Modifier  = Modifier,
     viewModel: SleepViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -171,7 +164,7 @@ fun SleepCalculatorScreen(
         val bedTime = when (selectedBedTimeOption) {
             BedTimeOption.SleepNow -> ZonedDateTime.now()
             BedTimeOption.Custom -> customBedTime?.let {
-                SleepCycleCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
+                SleepCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
             }
         }
         bedTime?.let { bed ->
@@ -186,7 +179,7 @@ fun SleepCalculatorScreen(
                     id = "wake-$cycles",
                     displayMillis = suggestedTime.toInstant().toEpochMilli(),
                     cycles = cycles,
-                    type = com.cs407.afinal.model.SleepSuggestionType.WAKE_UP,
+                    type = SleepSuggestionType.WAKE_UP,
                     note = durationText,
                     referenceMillis = bed.toInstant().toEpochMilli()
                 )
@@ -349,7 +342,7 @@ fun SleepCalculatorScreen(
                             val bedTimeMillis = when (selectedBedTimeOption) {
                                 BedTimeOption.SleepNow -> System.currentTimeMillis()
                                 BedTimeOption.Custom -> customBedTime?.let {
-                                    SleepCycleCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
+                                    SleepCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
                                         .toInstant().toEpochMilli()
                                 }
                             }

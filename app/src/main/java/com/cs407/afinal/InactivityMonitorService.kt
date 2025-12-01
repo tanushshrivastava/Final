@@ -19,9 +19,8 @@ import android.os.Build
 import android.os.IBinder
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
-import com.cs407.afinal.alarm.AlarmScheduler
-import com.cs407.afinal.data.AlarmPreferences
-import com.cs407.afinal.model.AlarmItem
+import com.cs407.afinal.alarm.AlarmManager  // CHANGED: from AlarmScheduler
+import com.cs407.afinal.alarm.AlarmItem     // CHANGED: now in alarm package
 import java.util.Calendar
 import kotlin.math.sqrt
 
@@ -42,8 +41,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
     // System services and managers for sensors and scheduling.
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
-    private lateinit var alarmPreferences: AlarmPreferences
-    private lateinit var alarmScheduler: AlarmScheduler
+    private lateinit var alarmManager: AlarmManager  // CHANGED: renamed from alarmPreferences/alarmScheduler
 
     // Tracks the timestamp of the last detected movement.
     private var lastMovementTime = System.currentTimeMillis()
@@ -56,9 +54,8 @@ class InactivityMonitorService : Service(), SensorEventListener {
      */
     override fun onCreate() {
         super.onCreate()
-        // Initialize preferences, scheduler, and sensor manager.
-        alarmPreferences = AlarmPreferences(this)
-        alarmScheduler = AlarmScheduler(this)
+        // Initialize alarm manager and sensor manager.
+        alarmManager = AlarmManager(this)  // CHANGED: single manager instance
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
@@ -72,7 +69,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // If the user has disabled the auto-alarm feature, stop the service immediately.
-        if (!alarmPreferences.isAutoAlarmEnabled()) {
+        if (!alarmManager.isAutoAlarmEnabled()) {  // CHANGED: use alarmManager
             stopSelf()
             return START_NOT_STICKY // Do not restart the service automatically.
         }
@@ -108,7 +105,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
             updateNotification() // Update notification to show reset timer.
 
             // For testing purposes, show a Toast when movement is detected on short inactivity settings.
-            if (alarmPreferences.getAutoAlarmInactivityMinutes() <= 5) {
+            if (alarmManager.getAutoAlarmInactivityMinutes() <= 5) {  // CHANGED
                 Toast.makeText(this, "Movement detected - timer reset", Toast.LENGTH_SHORT).show()
             }
         }
@@ -128,7 +125,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
     private fun checkInactivity() {
         val now = System.currentTimeMillis()
         val inactiveDurationMs = now - lastMovementTime
-        val thresholdMs = alarmPreferences.getAutoAlarmInactivityMinutes() * 60 * 1000L
+        val thresholdMs = alarmManager.getAutoAlarmInactivityMinutes() * 60 * 1000L  // CHANGED
 
         // Update the foreground notification with the current status.
         updateNotification()
@@ -136,7 +133,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
         // Trigger conditions: 1) Inactivity duration has passed, 2) It's within the monitoring time window.
         if (inactiveDurationMs >= thresholdMs && shouldMonitorNow()) {
             // Check if an auto-set alarm is already active to avoid setting duplicates.
-            val existingAutoAlarm = alarmPreferences.loadAlarms().firstOrNull { it.isAutoSet && it.isEnabled }
+            val existingAutoAlarm = alarmManager.loadAlarms().firstOrNull { it.isAutoSet && it.isEnabled }  // CHANGED
             if (existingAutoAlarm == null) {
                 // If no auto-alarm exists, create and schedule a new one.
                 setAutoAlarm()
@@ -159,7 +156,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
      * @return `true` if the current time is within the monitoring window, `false` otherwise.
      */
     private fun shouldMonitorNow(): Boolean {
-        val (triggerHour, triggerMinute) = alarmPreferences.getAutoAlarmTriggerTime()
+        val (triggerHour, triggerMinute) = alarmManager.getAutoAlarmTriggerTime()  // CHANGED
         val now = Calendar.getInstance()
         val currentHour = now.get(Calendar.HOUR_OF_DAY)
         val currentMinute = now.get(Calendar.MINUTE)
@@ -177,7 +174,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
         val sleepCycleDurationMs = 90 * 60 * 1000L // 90 minutes per cycle.
         val wakeUpTime = System.currentTimeMillis() + (6 * sleepCycleDurationMs) // Set alarm for 9 hours from now.
 
-        val alarmId = alarmPreferences.nextAlarmId() // Get a new, unique ID for the alarm.
+        val alarmId = alarmManager.nextAlarmId() // Get a new, unique ID for the alarm.  // CHANGED
         val alarm = AlarmItem(
             id = alarmId,
             triggerAtMillis = wakeUpTime,
@@ -191,8 +188,8 @@ class InactivityMonitorService : Service(), SensorEventListener {
         )
 
         // Save the new alarm to preferences and schedule it with the AlarmManager.
-        alarmPreferences.upsertAlarm(alarm)
-        alarmScheduler.schedule(alarm)
+        alarmManager.upsertAlarm(alarm)      // CHANGED
+        alarmManager.scheduleAlarm(alarm)    // CHANGED
 
         // Send a broadcast to notify the UI (e.g., the alarm list screen) that a new alarm has been created.
         val intent = Intent("com.cs407.afinal.ALARM_CREATED")
@@ -222,8 +219,8 @@ class InactivityMonitorService : Service(), SensorEventListener {
      * @return The configured [Notification] object.
      */
     private fun createNotification(): Notification {
-        val inactivityMinutes = alarmPreferences.getAutoAlarmInactivityMinutes()
-        val (triggerHour, triggerMinute) = alarmPreferences.getAutoAlarmTriggerTime()
+        val inactivityMinutes = alarmManager.getAutoAlarmInactivityMinutes()  // CHANGED
+        val (triggerHour, triggerMinute) = alarmManager.getAutoAlarmTriggerTime()  // CHANGED
         val timeUntilInactiveSeconds = (inactivityThresholdMs - (System.currentTimeMillis() - lastMovementTime)) / 1000
 
         // Determine the text to display based on the current state.
@@ -277,5 +274,5 @@ class InactivityMonitorService : Service(), SensorEventListener {
 
     // A helper property to get the inactivity threshold in milliseconds from preferences.
     private val inactivityThresholdMs: Long
-        get() = alarmPreferences.getAutoAlarmInactivityMinutes() * 60 * 1000L
+        get() = alarmManager.getAutoAlarmInactivityMinutes() * 60 * 1000L  // CHANGED
 }

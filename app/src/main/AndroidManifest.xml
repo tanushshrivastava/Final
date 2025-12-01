@@ -32,7 +32,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".AlarmActivity"
+            android:name=".alarm.AlarmActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:showWhenLocked="true"
@@ -41,7 +41,7 @@
             android:theme="@style/Theme.Final" />
 
         <receiver
-            android:name=".AlarmReceiver"
+            android:name=".alarm.AlarmReceiver"
             android:exported="false" />
     </application>
 

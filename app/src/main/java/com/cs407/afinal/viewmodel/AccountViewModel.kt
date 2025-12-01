@@ -6,7 +6,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.afinal.InactivityMonitorService
-import com.cs407.afinal.data.AlarmPreferences
+import com.cs407.afinal.alarm.AlarmManager  // CHANGED: from alarm.AlarmPreferences
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -43,15 +43,15 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
-    private val alarmPreferences = AlarmPreferences(application)
+    private val alarmManager = AlarmManager(application)  // CHANGED: from AlarmPreferences
 
     private val _uiState = MutableStateFlow(
         AccountUiState(
             currentUserEmail = auth.currentUser?.email,
-            autoAlarmEnabled = alarmPreferences.isAutoAlarmEnabled(),
-            autoAlarmHour = alarmPreferences.getAutoAlarmTriggerTime().first,
-            autoAlarmMinute = alarmPreferences.getAutoAlarmTriggerTime().second,
-            autoAlarmInactivityMinutes = alarmPreferences.getAutoAlarmInactivityMinutes()
+            autoAlarmEnabled = alarmManager.isAutoAlarmEnabled(),  // CHANGED
+            autoAlarmHour = alarmManager.getAutoAlarmTriggerTime().first,  // CHANGED
+            autoAlarmMinute = alarmManager.getAutoAlarmTriggerTime().second,  // CHANGED
+            autoAlarmInactivityMinutes = alarmManager.getAutoAlarmInactivityMinutes()  // CHANGED
         )
     )
     val uiState: StateFlow<AccountUiState> = _uiState.asStateFlow()
@@ -156,23 +156,23 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setAutoAlarmEnabled(enabled: Boolean) {
-        alarmPreferences.setAutoAlarmEnabled(enabled)
+        alarmManager.setAutoAlarmEnabled(enabled)  // CHANGED
         _uiState.update { it.copy(autoAlarmEnabled = enabled) }
-        
+
         val intent = Intent(getApplication(), InactivityMonitorService::class.java)
         if (enabled) {
             ContextCompat.startForegroundService(getApplication(), intent)
         } else {
             getApplication<Application>().stopService(intent)
         }
-        
+
         viewModelScope.launch(Dispatchers.IO) {
             syncAutoAlarmSettingsToFirebase()
         }
     }
 
     fun setAutoAlarmTime(hour: Int, minute: Int) {
-        alarmPreferences.setAutoAlarmTriggerTime(hour, minute)
+        alarmManager.setAutoAlarmTriggerTime(hour, minute)  // CHANGED
         _uiState.update { it.copy(autoAlarmHour = hour, autoAlarmMinute = minute) }
         viewModelScope.launch(Dispatchers.IO) {
             syncAutoAlarmSettingsToFirebase()
@@ -180,7 +180,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setAutoAlarmInactivityMinutes(minutes: Int) {
-        alarmPreferences.setAutoAlarmInactivityMinutes(minutes)
+        alarmManager.setAutoAlarmInactivityMinutes(minutes)  // CHANGED
         _uiState.update { it.copy(autoAlarmInactivityMinutes = minutes) }
         viewModelScope.launch(Dispatchers.IO) {
             syncAutoAlarmSettingsToFirebase()
@@ -190,10 +190,10 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun syncAutoAlarmSettingsToFirebase() {
         val user = auth.currentUser ?: return
         val settings = mapOf(
-            "autoAlarmEnabled" to alarmPreferences.isAutoAlarmEnabled(),
-            "autoAlarmHour" to alarmPreferences.getAutoAlarmTriggerTime().first,
-            "autoAlarmMinute" to alarmPreferences.getAutoAlarmTriggerTime().second,
-            "autoAlarmInactivityMinutes" to alarmPreferences.getAutoAlarmInactivityMinutes()
+            "autoAlarmEnabled" to alarmManager.isAutoAlarmEnabled(),  // CHANGED
+            "autoAlarmHour" to alarmManager.getAutoAlarmTriggerTime().first,  // CHANGED
+            "autoAlarmMinute" to alarmManager.getAutoAlarmTriggerTime().second,  // CHANGED
+            "autoAlarmInactivityMinutes" to alarmManager.getAutoAlarmInactivityMinutes()  // CHANGED
         )
         firestore.collection("users")
             .document(user.uid)
@@ -228,9 +228,9 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
                 val hour = (settings["autoAlarmHour"] as? Long)?.toInt() ?: 22
                 val minute = (settings["autoAlarmMinute"] as? Long)?.toInt() ?: 30
                 val inactivityMinutes = (settings["autoAlarmInactivityMinutes"] as? Long)?.toInt() ?: 15
-                alarmPreferences.setAutoAlarmEnabled(enabled)
-                alarmPreferences.setAutoAlarmTriggerTime(hour, minute)
-                alarmPreferences.setAutoAlarmInactivityMinutes(inactivityMinutes)
+                alarmManager.setAutoAlarmEnabled(enabled)  // CHANGED
+                alarmManager.setAutoAlarmTriggerTime(hour, minute)  // CHANGED
+                alarmManager.setAutoAlarmInactivityMinutes(inactivityMinutes)  // CHANGED
                 _uiState.update {
                     it.copy(
                         autoAlarmEnabled = enabled,

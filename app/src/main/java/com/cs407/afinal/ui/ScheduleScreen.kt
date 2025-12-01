@@ -4,14 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,8 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.cs407.afinal.model.AlarmItem
-import com.cs407.afinal.viewmodel.SleepViewModel
+import com.cs407.afinal.alarm.AlarmItem
+import com.cs407.afinal.alarm.SleepHistoryEntry
+import com.cs407.afinal.sleep.SleepViewModel
 import java.text.SimpleDateFormat
 import java.time.*
 import java.time.format.DateTimeFormatter
@@ -728,7 +724,7 @@ private fun EmptyAlarmsPlaceholder() {
 }
 
 @Composable
-private fun SleepHistorySection(history: List<com.cs407.afinal.model.SleepHistoryEntry>) {
+private fun SleepHistorySection(history: List<SleepHistoryEntry>) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -768,7 +764,7 @@ private fun SleepHistorySection(history: List<com.cs407.afinal.model.SleepHistor
 }
 
 @Composable
-private fun HistoryItem(entry: com.cs407.afinal.model.SleepHistoryEntry) {
+private fun HistoryItem(entry: SleepHistoryEntry) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

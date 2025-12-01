@@ -22,7 +22,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs407.afinal.R
-import com.cs407.afinal.viewmodel.SleepViewModel
+import com.cs407.afinal.sleep.SleepViewModel
 import java.util.concurrent.TimeUnit
 
 @Composable

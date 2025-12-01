@@ -3,7 +3,7 @@
  * It is responsible for playing the alarm sound, showing a full-screen UI to the user,
  * and handling the dismissal of the alarm.
  */
-package com.cs407.afinal
+package com.cs407.afinal.alarm
 
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -32,9 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.lifecycleScope
-import com.cs407.afinal.alarm.AlarmConstants
-import com.cs407.afinal.data.AlarmPreferences
-import com.cs407.afinal.viewmodel.SleepViewModel
+import com.cs407.afinal.sleep.SleepViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -120,8 +118,9 @@ class AlarmActivity : ComponentActivity() {
         NotificationManagerCompat.from(this).cancel(alarmId)
 
         // Record the time the alarm was dismissed and update the sleep data.
-        val entry = AlarmPreferences(applicationContext).markAlarmDismissed(alarmId, System.currentTimeMillis())
-        sleepViewModel.onAlarmDismissed(alarmId, entry)
+        // CHANGED: Use AlarmManager instead of AlarmPreferences
+        AlarmManager(applicationContext).markAlarmDismissed(alarmId, System.currentTimeMillis())
+        sleepViewModel.onAlarmDismissed(alarmId)  // CHANGED: Simplified signature
 
         // Finish the activity to return to the previous screen or the home screen.
         finish()
@@ -200,9 +199,9 @@ class AlarmActivity : ComponentActivity() {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
     }

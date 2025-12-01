@@ -1,4 +1,4 @@
-    package com.cs407.afinal.util
+package com.cs407.afinal.util
 
 import android.content.Context
 import android.content.Intent
@@ -13,6 +13,7 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.util.Locale
 import android.util.Log
+import com.cs407.afinal.sleep.SleepCalculator
 
 /**
  * Handles voice command processing for setting alarms
@@ -36,7 +37,7 @@ class VoiceCommandHandler(private val context: Context) {
         }
 
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-        
+
         val recognitionListener = object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 trySend(VoiceResult.Listening)
@@ -151,7 +152,7 @@ class VoiceCommandHandler(private val context: Context) {
      */
     private fun parseVoiceCommand(command: String): AlarmCommand? {
         val lowerCommand = command.lowercase().trim()
-        
+
         // Convert words to numbers first
         val numberWords = mapOf(
             "one" to "1", "two" to "2", "three" to "3", "four" to "4", "five" to "5",
@@ -159,12 +160,12 @@ class VoiceCommandHandler(private val context: Context) {
             "eleven" to "11", "twelve" to "12", "fifteen" to "15", "twenty" to "20",
             "thirty" to "30", "forty" to "40", "fifty" to "50", "sixty" to "60"
         )
-        
+
         var processedCommand = lowerCommand
         for ((word, num) in numberWords) {
             processedCommand = processedCommand.replace(word, num)
         }
-        
+
         // Handle relative time first (higher priority)
         // "30 minutes", "in 30 minutes", "thirty minutes"
         Regex("""(\d+)\s*minute[s]?""").find(processedCommand)?.let { match ->
@@ -176,7 +177,7 @@ class VoiceCommandHandler(private val context: Context) {
                 cycles = null
             )
         }
-        
+
         // "2 hours", "in 2 hours", "two hours"
         Regex("""(\d+)\s*hour[s]?""").find(processedCommand)?.let { match ->
             val hours = match.groupValues[1].toIntOrNull() ?: return null
@@ -187,7 +188,7 @@ class VoiceCommandHandler(private val context: Context) {
                 cycles = null
             )
         }
-        
+
         // Try to extract time from various formats
         val timePatterns = listOf(
             // "7:30 am" or "7:30 pm"
@@ -209,19 +210,19 @@ class VoiceCommandHandler(private val context: Context) {
                             val minute = match.groupValues[2].toIntOrNull() ?: continue
                             val amPm = match.groupValues[3].replace(".", "").lowercase()
                             val isPM = amPm.startsWith("p")
-                            
+
                             var adjustedHour = hour
                             if (isPM && hour != 12) adjustedHour += 12
                             if (!isPM && hour == 12) adjustedHour = 0
-                            
+
                             if (adjustedHour !in 0..23 || minute !in 0..59) continue
-                            
+
                             val targetTime = LocalTime.of(adjustedHour, minute)
-                            val zonedTime = SleepCycleCalculator.normalizeTargetDateTime(
-                                com.cs407.afinal.model.SleepMode.WAKE_TIME,
+                            val zonedTime = SleepCalculator.normalizeTargetDateTime(
+                                com.cs407.afinal.sleep.SleepMode.WAKE_TIME,
                                 targetTime
                             )
-                            
+
                             AlarmCommand(
                                 triggerAtMillis = zonedTime.toInstant().toEpochMilli(),
                                 label = "Voice alarm",
@@ -233,19 +234,19 @@ class VoiceCommandHandler(private val context: Context) {
                             val hour = match.groupValues[1].toIntOrNull() ?: continue
                             val amPm = match.groupValues[2].replace(".", "").lowercase()
                             val isPM = amPm.startsWith("p")
-                            
+
                             var adjustedHour = hour
                             if (isPM && hour != 12) adjustedHour += 12
                             if (!isPM && hour == 12) adjustedHour = 0
-                            
+
                             if (adjustedHour !in 0..23) continue
-                            
+
                             val targetTime = LocalTime.of(adjustedHour, 0)
-                            val zonedTime = SleepCycleCalculator.normalizeTargetDateTime(
-                                com.cs407.afinal.model.SleepMode.WAKE_TIME,
+                            val zonedTime = SleepCalculator.normalizeTargetDateTime(
+                                com.cs407.afinal.sleep.SleepMode.WAKE_TIME,
                                 targetTime
                             )
-                            
+
                             AlarmCommand(
                                 triggerAtMillis = zonedTime.toInstant().toEpochMilli(),
                                 label = "Voice alarm",
@@ -257,7 +258,7 @@ class VoiceCommandHandler(private val context: Context) {
                             val timeStr = match.groupValues[1]
                             val hour: Int
                             val minute: Int
-                            
+
                             when (timeStr.length) {
                                 3 -> {
                                     hour = timeStr.substring(0, 1).toIntOrNull() ?: continue
@@ -269,15 +270,15 @@ class VoiceCommandHandler(private val context: Context) {
                                 }
                                 else -> continue
                             }
-                            
+
                             if (hour !in 0..23 || minute !in 0..59) continue
-                            
+
                             val targetTime = LocalTime.of(hour, minute)
-                            val zonedTime = SleepCycleCalculator.normalizeTargetDateTime(
-                                com.cs407.afinal.model.SleepMode.WAKE_TIME,
+                            val zonedTime = SleepCalculator.normalizeTargetDateTime(
+                                com.cs407.afinal.sleep.SleepMode.WAKE_TIME,
                                 targetTime
                             )
-                            
+
                             AlarmCommand(
                                 triggerAtMillis = zonedTime.toInstant().toEpochMilli(),
                                 label = "Voice alarm",
@@ -315,5 +316,4 @@ data class AlarmCommand(
     val label: String,
     val cycles: Int?
 )
-
 
