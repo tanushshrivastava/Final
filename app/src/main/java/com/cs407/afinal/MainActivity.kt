@@ -48,6 +48,10 @@ class MainActivity : ComponentActivity() {
         // Check user preferences and start the background service if needed.
         startInactivityMonitorIfEnabled()
 
+        // Start the voice recognition service
+        val voiceServiceIntent = Intent(this, VoiceRecognitionService::class.java)
+        startService(voiceServiceIntent)
+
         // Set the main content of the activity to be our Jetpack Compose application UI.
         setContent {
             FinalTheme {

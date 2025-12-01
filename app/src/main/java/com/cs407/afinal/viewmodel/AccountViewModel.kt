@@ -215,6 +215,8 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
             viewModelScope.launch(Dispatchers.IO) {
                 loadAutoAlarmSettingsFromFirebase(user)
             }
+        } else {
+            setAutoAlarmEnabled(false)
         }
     }
 
@@ -228,9 +230,13 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
                 val hour = (settings["autoAlarmHour"] as? Long)?.toInt() ?: 22
                 val minute = (settings["autoAlarmMinute"] as? Long)?.toInt() ?: 30
                 val inactivityMinutes = (settings["autoAlarmInactivityMinutes"] as? Long)?.toInt() ?: 15
+                
+                // Update local preferences first
                 alarmPreferences.setAutoAlarmEnabled(enabled)
                 alarmPreferences.setAutoAlarmTriggerTime(hour, minute)
                 alarmPreferences.setAutoAlarmInactivityMinutes(inactivityMinutes)
+                
+                // Update UI state
                 _uiState.update {
                     it.copy(
                         autoAlarmEnabled = enabled,
@@ -238,6 +244,14 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
                         autoAlarmMinute = minute,
                         autoAlarmInactivityMinutes = inactivityMinutes
                     )
+                }
+
+                // After loading settings, ensure the service is in the correct state.
+                val intent = Intent(getApplication(), InactivityMonitorService::class.java)
+                if (enabled) {
+                    ContextCompat.startForegroundService(getApplication(), intent)
+                } else {
+                    getApplication<Application>().stopService(intent)
                 }
             }
         }

@@ -71,6 +71,11 @@ class InactivityMonitorService : Service(), SensorEventListener {
      * Called by the system every time a client starts the service using startService().
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_RESET_INACTIVITY_TIMER) {
+            lastMovementTime = System.currentTimeMillis()
+            updateNotification()
+        }
+        
         // If the user has disabled the auto-alarm feature, stop the service immediately.
         if (!alarmPreferences.isAutoAlarmEnabled()) {
             stopSelf()
@@ -136,7 +141,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
         // Trigger conditions: 1) Inactivity duration has passed, 2) It's within the monitoring time window.
         if (inactiveDurationMs >= thresholdMs && shouldMonitorNow()) {
             // Check if an auto-set alarm is already active to avoid setting duplicates.
-            val existingAutoAlarm = alarmPreferences.loadAlarms().firstOrNull { it.isAutoSet && it.isEnabled }
+            val existingAutoAlarm = alarmPreferences.loadAlarms().firstOrNull { it.isAutoSet }
             if (existingAutoAlarm == null) {
                 // If no auto-alarm exists, create and schedule a new one.
                 setAutoAlarm()
@@ -270,6 +275,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
      * Companion object to hold constants for the service.
      */
     companion object {
+        const val ACTION_RESET_INACTIVITY_TIMER = "com.cs407.afinal.ACTION_RESET_INACTIVITY_TIMER"
         private const val CHANNEL_ID = "inactivity_monitor_channel"
         private const val NOTIFICATION_ID = 2001 // A unique ID for the foreground notification.
         private const val MOVEMENT_THRESHOLD = 10.5f // Empirically determined value for significant movement.

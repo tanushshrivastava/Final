@@ -5,11 +5,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,7 +26,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,9 +45,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -63,8 +57,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -78,7 +70,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,7 +82,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.abs
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -99,8 +89,6 @@ import com.cs407.afinal.model.AlarmItem
 import com.cs407.afinal.model.SleepMode
 import com.cs407.afinal.model.SleepSuggestion
 import com.cs407.afinal.util.SleepCycleCalculator
-import com.cs407.afinal.util.VoiceCommandHandler
-import com.cs407.afinal.util.VoiceResult
 import com.cs407.afinal.viewmodel.AlarmScheduleOutcome
 import com.cs407.afinal.viewmodel.SleepViewModel
 import kotlinx.coroutines.delay
@@ -133,18 +121,6 @@ fun SleepCalculatorScreen(
     val notificationsPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasNotificationPermission = granted }
-
-    var hasMicrophonePermission by remember {
-        mutableStateOf(isMicrophonePermissionGranted(context))
-    }
-    val microphonePermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> hasMicrophonePermission = granted }
-
-    var isListeningForVoice by remember { mutableStateOf(false) }
-    var voiceStatus by remember { mutableStateOf("") }
-    var showVoiceDialog by remember { mutableStateOf(false) }
-    val voiceCommandHandler = remember { VoiceCommandHandler(context) }
 
     var showTimePicker by remember { mutableStateOf(false) }
     var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
@@ -203,87 +179,7 @@ fun SleepCalculatorScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            if (primaryAlarm == null) {
-                FloatingActionButton(
-                    onClick = {
-                        if (!hasMicrophonePermission) {
-                            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        } else {
-                            showVoiceDialog = true
-                            isListeningForVoice = true
-                            voiceStatus = "Listening..."
-                            
-                            coroutineScope.launch {
-                                voiceCommandHandler.startListening().collect { result ->
-                                    when (result) {
-                                        is VoiceResult.Listening -> {
-                                            voiceStatus = "🎤 Listening... Speak now!"
-                                        }
-                                        is VoiceResult.AudioDetected -> {
-                                            // Microphone is picking up audio
-                                            voiceStatus = "🎤 Audio detected! Keep speaking..."
-                                        }
-                                        is VoiceResult.Speaking -> {
-                                            voiceStatus = "🗣️ Speaking..."
-                                        }
-                                        is VoiceResult.Processing -> {
-                                            voiceStatus = "⚙️ Processing..."
-                                        }
-                                        is VoiceResult.Success -> {
-                                            isListeningForVoice = false
-                                            if (result.command != null) {
-                                                voiceStatus = "✅ Setting alarm..."
-                                                delay(500)
-                                                showVoiceDialog = false
-                                                
-                                                when (val outcome = viewModel.tryScheduleAlarm(
-                                                    triggerAtMillis = result.command.triggerAtMillis,
-                                                    label = result.command.label,
-                                                    gentleWake = true,
-                                                    cycles = result.command.cycles,
-                                                    plannedBedTimeMillis = null
-                                                )) {
-                                                    AlarmScheduleOutcome.MissingExactAlarmPermission -> 
-                                                        promptExactAlarmPermission(context)
-                                                    is AlarmScheduleOutcome.Error -> {
-                                                        snackbarHostState.showSnackbar(outcome.reason)
-                                                    }
-                                                    else -> {
-                                                        snackbarHostState.showSnackbar(
-                                                            "Voice alarm set: \"${result.recognizedText}\""
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                voiceStatus = "❌ Couldn't parse command.\nI heard: \"${result.recognizedText}\"\n\nTry: '7 AM' or '30 minutes'"
-                                                delay(5000)
-                                                showVoiceDialog = false
-                                            }
-                                        }
-                                        is VoiceResult.Error -> {
-                                            isListeningForVoice = false
-                                            voiceStatus = "❌ ${result.message}"
-                                            delay(7000)
-                                            showVoiceDialog = false
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    containerColor = Color(0xFF5C6BC0),
-                    contentColor = Color.White
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Voice Command",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier
@@ -437,24 +333,6 @@ fun SleepCalculatorScreen(
                 showAddFollowUpDialog = false
             }
         )
-    }
-
-    if (showVoiceDialog) {
-        VoiceCommandDialog(
-            status = voiceStatus,
-            isListening = isListeningForVoice,
-            onDismiss = {
-                showVoiceDialog = false
-                isListeningForVoice = false
-                voiceCommandHandler.stopListening()
-            }
-        )
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            voiceCommandHandler.stopListening()
-        }
     }
 }
 
@@ -1006,13 +884,6 @@ private fun isNotificationPermissionGranted(context: android.content.Context): B
     ) == PackageManager.PERMISSION_GRANTED
 }
 
-private fun isMicrophonePermissionGranted(context: android.content.Context): Boolean {
-    return ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.RECORD_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED
-}
-
 private fun formatLocalTime(localTime: LocalTime): String {
     val formatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
     val date = Date.from(
@@ -1034,12 +905,6 @@ private fun formatDayLabel(epochMillis: Long): String {
         today.plusDays(1) -> "Tomorrow"
         else -> date.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
     }
-}
-
-private fun formatDurationMinutes(minutes: Int): String {
-    val hours = minutes / 60
-    val mins = minutes % 60
-    return if (mins == 0) "${hours}h sleep" else "${hours}h ${mins}m sleep"
 }
 
 // ============ NEW UI COMPONENTS ============
@@ -1237,79 +1102,6 @@ private data class CreateAlarmDialogState(
     val cycles: Int?,
     val plannedBedTimeMillis: Long?
 )
-
-@Composable
-private fun VoiceCommandDialog(
-    status: String,
-    isListening: Boolean,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = null,
-                    tint = if (isListening) Color(0xFFD32F2F) else Color(0xFF5C6BC0),
-                    modifier = Modifier.size(24.dp)
-                )
-                Text("Voice Command")
-            }
-        },
-        text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                // Animated microphone icon
-                if (isListening) {
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .background(Color(0xFFD32F2F).copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = null,
-                            tint = Color(0xFFD32F2F),
-                            modifier = Modifier.size(48.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = status,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    color = Color.Black
-                )
-
-                if (isListening) {
-                    Text(
-                        text = "Try saying:\n\"Set alarm for 7 AM\"\n\"Wake me in 30 minutes\"\n\"Alarm at 10:30 PM\"",
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        color = Color.Gray,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
 
 @Composable
 private fun DayChip(
