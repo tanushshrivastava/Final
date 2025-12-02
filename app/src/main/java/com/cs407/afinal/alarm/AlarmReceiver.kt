@@ -46,7 +46,6 @@ class AlarmReceiver : BroadcastReceiver() {
         val plannedBedTime = intent.getLongExtra(AlarmConstants.EXTRA_PLANNED_BEDTIME, -1)
         val isRecurring = intent.getBooleanExtra(AlarmConstants.EXTRA_IS_RECURRING, false)
 
-        // CHANGED: Use AlarmManager instead of AlarmPreferences
         val alarmManager = AlarmManager(context)
         val currentAlarms = alarmManager.loadAlarms()
 
@@ -54,7 +53,7 @@ class AlarmReceiver : BroadcastReceiver() {
         currentAlarms.firstOrNull { it.id == alarmId }?.let { alarm ->
             if (isRecurring) {
                 // For recurring alarms, we need to calculate and schedule the next occurrence.
-                alarmManager.scheduleAlarm(alarm) // CHANGED: use scheduleAlarm() instead of schedule()
+                alarmManager.scheduleAlarm(alarm)
             } else {
                 // For one-time alarms, we simply mark them as disabled so they don't ring again.
                 alarmManager.upsertAlarm(alarm.copy(isEnabled = false))

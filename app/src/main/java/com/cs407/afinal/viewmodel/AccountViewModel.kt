@@ -6,7 +6,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.afinal.InactivityMonitorService
-import com.cs407.afinal.alarm.AlarmManager  // CHANGED: from alarm.AlarmPreferences
+import com.cs407.afinal.alarm.AlarmManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -43,7 +43,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
-    private val alarmManager = AlarmManager(application)  // CHANGED: from AlarmPreferences
+    private val alarmManager = AlarmManager(application)
 
     private val _uiState = MutableStateFlow(
         AccountUiState(

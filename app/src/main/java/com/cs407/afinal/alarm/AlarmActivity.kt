@@ -118,9 +118,8 @@ class AlarmActivity : ComponentActivity() {
         NotificationManagerCompat.from(this).cancel(alarmId)
 
         // Record the time the alarm was dismissed and update the sleep data.
-        // CHANGED: Use AlarmManager instead of AlarmPreferences
         AlarmManager(applicationContext).markAlarmDismissed(alarmId, System.currentTimeMillis())
-        sleepViewModel.onAlarmDismissed(alarmId)  // CHANGED: Simplified signature
+        sleepViewModel.onAlarmDismissed(alarmId)
 
         // Finish the activity to return to the previous screen or the home screen.
         finish()
@@ -145,13 +144,13 @@ class AlarmActivity : ComponentActivity() {
             )
             prepare() // Prepare the player synchronously.
 
-            // Set initial volume based on the "gentle wake" preference.
+            // Set initial volume based on the "gentle wake" preference and grow accordingly
             if (gentleWake) {
-                setVolume(0f, 0f) // Start at zero volume.
+                setVolume(0f, 0f)
             } else {
-                setVolume(1f, 1f) // Start at full volume.
+                setVolume(1f, 1f)
             }
-            start() // Start playback.
+            start()
         }
 
         // If gentle wake is enabled, start a coroutine to gradually increase the volume.
@@ -190,20 +189,9 @@ class AlarmActivity : ComponentActivity() {
      * This is crucial for an alarm clock app.
      */
     private fun keepScreenAwake() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            // Modern APIs for showing activity over lock screen.
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            // Deprecated flags for older Android versions.
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
-        }
+        // Modern APIs for showing activity over lock screen.
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
     }
 }
 

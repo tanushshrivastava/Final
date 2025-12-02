@@ -1,6 +1,7 @@
 package com.cs407.afinal.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -116,7 +117,7 @@ fun SleepCalculatorScreen(
             ) {
                 Text("Set Alarm", fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                if (true && !hasNotificationPermission) {
                     PermissionWarningCard { notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
                 }
 
@@ -218,6 +219,7 @@ fun SleepCalculatorScreen(
     }
 }
 
+@SuppressLint("DefaultLocale")
 @Composable
 private fun AutoAlarmStatusCard(status: AutoAlarmStatus) {
     AnimatedVisibility(visible = status.isEnabled, enter = fadeIn(), exit = fadeOut()) {
