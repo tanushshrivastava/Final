@@ -18,7 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import com.cs407.afinal.alarm.AlarmManager  // CHANGED: from data.AlarmPreferences
+import com.cs407.afinal.alarm.AlarmManager
 import com.cs407.afinal.ui.SmartSleepApp
 import com.cs407.afinal.ui.theme.FinalTheme
 
@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
 
         // Check user preferences and start the background service if needed.
         startInactivityMonitorIfEnabled()
+
+        // Start the voice recognition service
+        val voiceServiceIntent = Intent(this, VoiceRecognitionService::class.java)
+        startService(voiceServiceIntent)
 
         // Set the main content of the activity to be our Jetpack Compose application UI.
         setContent {
@@ -81,7 +85,7 @@ class MainActivity : ComponentActivity() {
      */
     private fun startInactivityMonitorIfEnabled() {
         // Access user preferences to see if the auto-alarm feature is turned on.
-        val alarmManager = AlarmManager(this)  // CHANGED: use AlarmManager instead of AlarmPreferences
+        val alarmManager = AlarmManager(this)
         if (alarmManager.isAutoAlarmEnabled()) {
             // If enabled, create an intent for the service.
             val intent = Intent(this, InactivityMonitorService::class.java)

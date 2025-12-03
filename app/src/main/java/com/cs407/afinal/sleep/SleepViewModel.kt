@@ -1,13 +1,15 @@
-/**
- * ViewModel for sleep tracking UI - simplified to UI state only.
- * All alarm operations delegated to AlarmManager.
- * Location: com.cs407.afinal.sleep.SleepViewModel.kt
- */
 package com.cs407.afinal.sleep
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.cs407.afinal.InactivityMonitorService
 import com.cs407.afinal.alarm.AlarmItem
 import com.cs407.afinal.alarm.AlarmManager
 import com.cs407.afinal.alarm.AlarmScheduleOutcome
@@ -17,12 +19,12 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
@@ -41,19 +43,48 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
     private var alarmsListener: ListenerRegistration? = null
     private var historyListener: ListenerRegistration? = null
 
+    private val statusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val isMonitoring = intent.getBooleanExtra(InactivityMonitorService.EXTRA_IS_MONITORING, false)
+            val timeUntilTrigger = intent.getLongExtra(InactivityMonitorService.EXTRA_TIME_UNTIL_TRIGGER, 0L)
+            val wasReset = intent.getBooleanExtra(InactivityMonitorService.EXTRA_IS_RESET, false)
+            
+            _uiState.update {
+                it.copy(
+                    autoAlarmStatus = it.autoAlarmStatus.copy(
+                        isEnabled = alarmManager.isAutoAlarmEnabled(),
+                        isMonitoring = isMonitoring,
+                        timeUntilTrigger = timeUntilTrigger,
+                        wasJustReset = wasReset
+                    )
+                )
+            }
+            
+            if (wasReset) {
+                viewModelScope.launch {
+                    delay(2000)
+                    _uiState.update { it.copy(autoAlarmStatus = it.autoAlarmStatus.copy(wasJustReset = false)) }
+                }
+            }
+        }
+    }
+
     init {
         auth.addAuthStateListener(authListener)
         refreshState()
         handleAuthChange(auth.currentUser)
+        LocalBroadcastManager.getInstance(application).registerReceiver(
+            statusReceiver,
+            IntentFilter(InactivityMonitorService.ACTION_STATUS_UPDATE)
+        )
     }
 
     override fun onCleared() {
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         detachRemoteListeners()
+        LocalBroadcastManager.getInstance(getApplication()).unregisterReceiver(statusReceiver)
     }
-
-    // ==================== UI STATE UPDATES ====================
 
     fun onModeChanged(newMode: SleepMode) {
         _uiState.update { current ->
@@ -89,8 +120,6 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(message = null) }
     }
 
-    // ==================== ALARM OPERATIONS ====================
-
     fun tryScheduleAlarm(
         triggerAtMillis: Long,
         label: String,
@@ -98,7 +127,7 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
         cycles: Int?,
         plannedBedTimeMillis: Long?,
         recurringDays: List<Int> = emptyList(),
-        parentAlarmId: Int? = null  // NEW: For follow-up alarms
+        parentAlarmId: Int? = null
     ): AlarmScheduleOutcome {
         if (!alarmManager.canScheduleExactAlarms()) {
             return AlarmScheduleOutcome.MissingExactAlarmPermission
@@ -160,6 +189,12 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             alarmManager.deleteAlarm(alarmId)
             alarmManager.deleteAlarmFromFirebase(alarmId)
+
+            val intent = Intent(getApplication(), InactivityMonitorService::class.java).apply {
+                action = InactivityMonitorService.ACTION_RESET_INACTIVITY_TIMER
+            }
+            ContextCompat.startForegroundService(getApplication(), intent)
+
             refreshState("Alarm deleted")
         }
     }
@@ -173,8 +208,6 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
             refreshState()
         }
     }
-
-    // ==================== PRIVATE HELPERS ====================
 
     private fun refreshState(message: String? = null) {
         val alarms = alarmManager.loadAlarms().sortedBy { it.triggerAtMillis }
@@ -205,8 +238,6 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-    // ==================== FIREBASE SYNC ====================
-
     private fun handleAuthChange(user: FirebaseUser?) {
         detachRemoteListeners()
         _uiState.update { it.copy(currentUserEmail = user?.email) }
@@ -221,17 +252,8 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun syncLocalToRemote(user: FirebaseUser) {
-        val userDoc = firestore.collection("users").document(user.uid)
-        val alarms = alarmManager.loadAlarms()
-        val history = alarmManager.loadHistory()
-
-        alarms.forEach { alarm ->
-            alarmManager.syncAlarmToFirebase(alarm)
-        }
-
-        history.forEach { entry ->
-            alarmManager.syncHistoryToFirebase(entry)
-        }
+        alarmManager.loadAlarms().forEach { alarmManager.syncAlarmToFirebase(it) }
+        alarmManager.loadHistory().forEach { alarmManager.syncHistoryToFirebase(it) }
     }
 
     private fun attachRemoteListeners(user: FirebaseUser) {

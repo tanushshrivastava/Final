@@ -424,6 +424,12 @@ class AlarmManager(private val context: Context) {
     fun setAutoAlarmInactivityMinutes(minutes: Int) {
         prefs.edit { putInt(KEY_AUTO_ALARM_INACTIVITY_MINUTES, minutes) }
     }
+    
+    fun getLastInactivityResetTime(): Long = prefs.getLong(KEY_LAST_INACTIVITY_RESET, 0L)
+
+    fun setLastInactivityResetTime(time: Long) {
+        prefs.edit { putLong(KEY_LAST_INACTIVITY_RESET, time) }
+    }
 
     companion object {
         private const val PREFS_NAME = "AlarmApp"
@@ -435,5 +441,6 @@ class AlarmManager(private val context: Context) {
         private const val KEY_AUTO_ALARM_HOUR = "auto_alarm_hour"
         private const val KEY_AUTO_ALARM_MINUTE = "auto_alarm_minute"
         private const val KEY_AUTO_ALARM_INACTIVITY_MINUTES = "auto_alarm_inactivity_minutes"
+        private const val KEY_LAST_INACTIVITY_RESET = "last_inactivity_reset_time"
     }
 }

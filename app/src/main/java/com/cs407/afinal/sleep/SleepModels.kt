@@ -1,7 +1,3 @@
-/**
- * Data models for sleep tracking and calculations.
- * Location: com.cs407.afinal.sleep/SleepModels.kt
- */
 package com.cs407.afinal.sleep
 
 import com.cs407.afinal.alarm.AlarmItem
@@ -37,6 +33,16 @@ data class SleepSuggestion(
 )
 
 /**
+ * Holds the current status of the auto-alarm feature.
+ */
+data class AutoAlarmStatus(
+    val isEnabled: Boolean = false,
+    val isMonitoring: Boolean = false,
+    val timeUntilTrigger: Long = 0L,
+    val wasJustReset: Boolean = false
+)
+
+/**
  * UI state for the sleep screen
  */
 data class SleepUiState(
@@ -46,5 +52,6 @@ data class SleepUiState(
     val alarms: List<AlarmItem> = emptyList(),
     val history: List<SleepHistoryEntry> = emptyList(),
     val message: String? = null,
-    val currentUserEmail: String? = null
+    val currentUserEmail: String? = null,
+    val autoAlarmStatus: AutoAlarmStatus = AutoAlarmStatus()
 )

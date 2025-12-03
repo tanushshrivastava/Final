@@ -1,77 +1,29 @@
 package com.cs407.afinal.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.TipsAndUpdates
-import androidx.compose.material.icons.filled.WatchLater
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,31 +40,19 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs407.afinal.alarm.AlarmItem
-import com.cs407.afinal.sleep.SleepMode
-import com.cs407.afinal.sleep.SleepSuggestion
-import com.cs407.afinal.sleep.SleepSuggestionType
-import com.cs407.afinal.sleep.SleepCalculator
-import com.cs407.afinal.util.VoiceCommandHandler
-import com.cs407.afinal.util.VoiceResult
 import com.cs407.afinal.alarm.AlarmScheduleOutcome
-import com.cs407.afinal.sleep.SleepViewModel
+import com.cs407.afinal.sleep.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
-import java.time.ZonedDateTime
+import java.time.*
 import java.time.format.DateTimeFormatter
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepCalculatorScreen(
-    modifier: Modifier  = Modifier,
+    modifier: Modifier = Modifier,
     viewModel: SleepViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -127,31 +67,17 @@ fun SleepCalculatorScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasNotificationPermission = granted }
 
-    var hasMicrophonePermission by remember {
-        mutableStateOf(isMicrophonePermissionGranted(context))
-    }
-    val microphonePermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> hasMicrophonePermission = granted }
-
-    var isListeningForVoice by remember { mutableStateOf(false) }
-    var voiceStatus by remember { mutableStateOf("") }
-    var showVoiceDialog by remember { mutableStateOf(false) }
-    val voiceCommandHandler = remember { VoiceCommandHandler(context) }
-
     var showTimePicker by remember { mutableStateOf(false) }
     var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
     var selectedBedTimeOption by remember { mutableStateOf<BedTimeOption>(BedTimeOption.SleepNow) }
     var customBedTime by remember { mutableStateOf<LocalTime?>(null) }
     var suggestions by remember { mutableStateOf<List<SleepSuggestion>>(emptyList()) }
-    val selectedRecurringDays = remember { mutableStateListOf<Int>() } // 1=Mon, 2=Tue, ..., 7=Sun
+    val selectedRecurringDays = remember { mutableStateListOf<Int>() }
 
-    // Track primary alarm and follow-up alarms
-    val primaryAlarm = uiState.alarms.firstOrNull()
-    val followUpAlarms = remember { mutableStateListOf<FollowUpAlarm>() }
+    val primaryAlarm = uiState.alarms.firstOrNull { !it.isFollowUp }
+    val followUpAlarms = uiState.alarms.filter { it.parentAlarmId == primaryAlarm?.id }
     var showAddFollowUpDialog by remember { mutableStateOf(false) }
 
-    // Update current time every minute
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = Calendar.getInstance()
@@ -159,165 +85,48 @@ fun SleepCalculatorScreen(
         }
     }
 
-    // Calculate suggestions based on selected option (1-6 cycles, no buffer)
     LaunchedEffect(selectedBedTimeOption, customBedTime, currentTime) {
         val bedTime = when (selectedBedTimeOption) {
             BedTimeOption.SleepNow -> ZonedDateTime.now()
-            BedTimeOption.Custom -> customBedTime?.let {
-                SleepCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
-            }
+            BedTimeOption.Custom -> customBedTime?.let { SleepCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it) }
         }
-        bedTime?.let { bed ->
-            suggestions = (1..6).map { cycles ->
-                val totalMinutes = cycles * 90 // Removed buffer for now
-                val suggestedTime = bed.plusMinutes(totalMinutes.toLong())
-                val hours = totalMinutes / 60
-                val mins = totalMinutes % 60
-                val durationText = if (mins == 0) "${hours}h sleep" else "${hours}h ${mins}m sleep"
-
-                SleepSuggestion(
-                    id = "wake-$cycles",
-                    displayMillis = suggestedTime.toInstant().toEpochMilli(),
-                    cycles = cycles,
-                    type = SleepSuggestionType.WAKE_UP,
-                    note = durationText,
-                    referenceMillis = bed.toInstant().toEpochMilli()
-                )
-            }
+        bedTime?.let {
+            suggestions = SleepCalculator.wakeTimeSuggestions(it)
         }
     }
 
     LaunchedEffect(uiState.message) {
-        uiState.message?.let { message ->
-            snackbarHostState.showSnackbar(message)
+        uiState.message?.let {
+            snackbarHostState.showSnackbar(it)
             viewModel.consumeMessage()
         }
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            if (primaryAlarm == null) {
-                FloatingActionButton(
-                    onClick = {
-                        if (!hasMicrophonePermission) {
-                            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        } else {
-                            showVoiceDialog = true
-                            isListeningForVoice = true
-                            voiceStatus = "Listening..."
-                            
-                            coroutineScope.launch {
-                                voiceCommandHandler.startListening().collect { result ->
-                                    when (result) {
-                                        is VoiceResult.Listening -> {
-                                            voiceStatus = "🎤 Listening... Speak now!"
-                                        }
-                                        is VoiceResult.AudioDetected -> {
-                                            // Microphone is picking up audio
-                                            voiceStatus = "🎤 Audio detected! Keep speaking..."
-                                        }
-                                        is VoiceResult.Speaking -> {
-                                            voiceStatus = "🗣️ Speaking..."
-                                        }
-                                        is VoiceResult.Processing -> {
-                                            voiceStatus = "⚙️ Processing..."
-                                        }
-                                        is VoiceResult.Success -> {
-                                            isListeningForVoice = false
-                                            if (result.command != null) {
-                                                voiceStatus = "✅ Setting alarm..."
-                                                delay(500)
-                                                showVoiceDialog = false
-                                                
-                                                when (val outcome = viewModel.tryScheduleAlarm(
-                                                    triggerAtMillis = result.command.triggerAtMillis,
-                                                    label = result.command.label,
-                                                    gentleWake = true,
-                                                    cycles = result.command.cycles,
-                                                    plannedBedTimeMillis = null
-                                                )) {
-                                                    AlarmScheduleOutcome.MissingExactAlarmPermission -> 
-                                                        promptExactAlarmPermission(context)
-                                                    is AlarmScheduleOutcome.Error -> {
-                                                        snackbarHostState.showSnackbar(outcome.reason)
-                                                    }
-                                                    else -> {
-                                                        snackbarHostState.showSnackbar(
-                                                            "Voice alarm set: \"${result.recognizedText}\""
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                voiceStatus = "❌ Couldn't parse command.\nI heard: \"${result.recognizedText}\"\n\nTry: '7 AM' or '30 minutes'"
-                                                delay(5000)
-                                                showVoiceDialog = false
-                                            }
-                                        }
-                                        is VoiceResult.Error -> {
-                                            isListeningForVoice = false
-                                            voiceStatus = "❌ ${result.message}"
-                                            delay(7000)
-                                            showVoiceDialog = false
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    containerColor = Color(0xFF5C6BC0),
-                    contentColor = Color.White
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Voice Command",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFE8EAF6))
-                .padding(padding),
+            modifier = Modifier.fillMaxSize().background(Color(0xFFE8EAF6)).padding(padding),
             contentAlignment = Alignment.TopCenter
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = "Set Alarm",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                Text("Set Alarm", fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
 
-                // Permission Warning at top
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                    PermissionWarningCard(
-                        onGrant = { notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
-                    )
+                if (true && !hasNotificationPermission) {
+                    PermissionWarningCard { notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
                 }
 
-                // Sync Status - Compact
                 if (uiState.currentUserEmail != null) {
-                    Text(
-                        text = "☁️ Synced to ${uiState.currentUserEmail}",
-                        fontSize = 12.sp,
-                        color = Color(0xFF5C6BC0)
-                    )
+                    Text("☁️ Synced to ${uiState.currentUserEmail}", fontSize = 12.sp, color = Color(0xFF5C6BC0))
                 }
 
-                // Main Card - Either set alarm or show active alarm
                 if (primaryAlarm == null) {
+                    AutoAlarmStatusCard(status = uiState.autoAlarmStatus)
                     SetAlarmCard(
                         currentTime = currentTime,
                         selectedOption = selectedBedTimeOption,
@@ -327,26 +136,20 @@ fun SleepCalculatorScreen(
                         onOptionSelected = { selectedBedTimeOption = it },
                         onSetCustomTime = { showTimePicker = true },
                         onQuickTimeSelected = { minutes ->
-                            val targetTime = LocalTime.now().plusMinutes(minutes.toLong())
-                            customBedTime = targetTime
+                            customBedTime = LocalTime.now().plusMinutes(minutes.toLong())
                             selectedBedTimeOption = BedTimeOption.Custom
                         },
                         onRecurringDayToggled = { day ->
-                            if (selectedRecurringDays.contains(day)) {
-                                selectedRecurringDays.remove(day)
-                            } else {
-                                selectedRecurringDays.add(day)
-                            }
+                            if (selectedRecurringDays.contains(day)) selectedRecurringDays.remove(day)
+                            else selectedRecurringDays.add(day)
                         },
                         onScheduleAlarm = { suggestion ->
                             val bedTimeMillis = when (selectedBedTimeOption) {
                                 BedTimeOption.SleepNow -> System.currentTimeMillis()
                                 BedTimeOption.Custom -> customBedTime?.let {
-                                    SleepCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it)
-                                        .toInstant().toEpochMilli()
+                                    SleepCalculator.normalizeTargetDateTime(SleepMode.BED_TIME, it).toInstant().toEpochMilli()
                                 }
                             }
-
                             when (val result = viewModel.tryScheduleAlarm(
                                 triggerAtMillis = suggestion.displayMillis,
                                 label = "Wake up",
@@ -356,11 +159,7 @@ fun SleepCalculatorScreen(
                                 recurringDays = selectedRecurringDays.toList()
                             )) {
                                 AlarmScheduleOutcome.MissingExactAlarmPermission -> promptExactAlarmPermission(context)
-                                is AlarmScheduleOutcome.Error -> {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(result.reason)
-                                    }
-                                }
+                                is AlarmScheduleOutcome.Error -> coroutineScope.launch { snackbarHostState.showSnackbar(result.reason) }
                                 else -> {
                                     selectedBedTimeOption = BedTimeOption.SleepNow
                                     customBedTime = null
@@ -370,35 +169,23 @@ fun SleepCalculatorScreen(
                         }
                     )
                 } else {
-                    // Time until alarm countdown
                     TimeUntilAlarmCard(triggerAtMillis = primaryAlarm.triggerAtMillis)
-                    
                     ActiveAlarmCard(
                         alarm = primaryAlarm,
                         followUpAlarms = followUpAlarms,
                         onToggle = { enabled ->
                             when (val result = viewModel.toggleAlarm(primaryAlarm, enabled)) {
                                 AlarmScheduleOutcome.MissingExactAlarmPermission -> promptExactAlarmPermission(context)
-                                is AlarmScheduleOutcome.Error -> {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(result.reason)
-                                    }
-                                }
+                                is AlarmScheduleOutcome.Error -> coroutineScope.launch { snackbarHostState.showSnackbar(result.reason) }
                                 else -> Unit
                             }
                         },
-                        onDelete = {
-                            viewModel.deleteAlarm(primaryAlarm.id)
-                            followUpAlarms.clear()
-                        },
+                        onDelete = { viewModel.deleteAlarm(primaryAlarm.id) },
                         onAddFollowUp = { showAddFollowUpDialog = true },
-                        onDeleteFollowUp = { followUp ->
-                            followUpAlarms.remove(followUp)
-                        }
+                        onDeleteFollowUp = { followUpId -> viewModel.deleteAlarm(followUpId) }
                     )
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
@@ -414,42 +201,63 @@ fun SleepCalculatorScreen(
         )
     }
 
-    if (showAddFollowUpDialog) {
+    if (showAddFollowUpDialog && primaryAlarm != null) {
         AddFollowUpDialog(
             onDismiss = { showAddFollowUpDialog = false },
             onConfirm = { minutes ->
-                primaryAlarm?.let { alarm ->
-                    followUpAlarms.add(
-                        FollowUpAlarm(
-                            id = followUpAlarms.size,
-                            minutesAfter = minutes,
-                            triggerAtMillis = alarm.triggerAtMillis + (minutes * 60 * 1000)
-                        )
-                    )
-                }
+                viewModel.tryScheduleAlarm(
+                    triggerAtMillis = primaryAlarm.triggerAtMillis + (minutes * 60 * 1000),
+                    label = "Reminder",
+                    gentleWake = false,
+                    cycles = null,
+                    plannedBedTimeMillis = null,
+                    parentAlarmId = primaryAlarm.id
+                )
                 showAddFollowUpDialog = false
             }
         )
     }
+}
 
-    if (showVoiceDialog) {
-        VoiceCommandDialog(
-            status = voiceStatus,
-            isListening = isListeningForVoice,
-            onDismiss = {
-                showVoiceDialog = false
-                isListeningForVoice = false
-                voiceCommandHandler.stopListening()
+@SuppressLint("DefaultLocale")
+@Composable
+private fun AutoAlarmStatusCard(status: AutoAlarmStatus) {
+    AnimatedVisibility(visible = status.isEnabled, enter = fadeIn(), exit = fadeOut()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF1565C0))
+                    Text(text = "Auto Alarm", fontWeight = FontWeight.Bold, color = Color(0xFF1565C0))
+                }
+                AnimatedContent(targetState = status.wasJustReset, transitionSpec = { fadeIn() togetherWith fadeOut() }) {
+                    if (it) {
+                        Text("Timer Reset!", color = Color(0xFF1565C0), fontWeight = FontWeight.Bold)
+                    } else {
+                        if (status.isMonitoring && status.timeUntilTrigger > 0) {
+                            val minutes = status.timeUntilTrigger / 1000 / 60
+                            val seconds = (status.timeUntilTrigger / 1000) % 60
+                            Text(String.format("in %02d:%02d", minutes, seconds), color = Color.Gray)
+                        } else {
+                            Text("Monitoring...", color = Color.Gray)
+                        }
+                    }
+                }
             }
-        )
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            voiceCommandHandler.stopListening()
         }
     }
 }
+
+// Other composables remain the same, so they are omitted for brevity.
+
+private enum class BedTimeOption { SleepNow, Custom }
 
 @Composable
 private fun SetAlarmCard(
@@ -484,7 +292,6 @@ private fun SetAlarmCard(
                 color = Color(0xFF3F51B5)
             )
             
-            // Quick Action Chips
             QuickActionChips(
                 onQuickSelect = { minutes ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -492,7 +299,6 @@ private fun SetAlarmCard(
                 }
             )
 
-            // Time Display
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -513,7 +319,6 @@ private fun SetAlarmCard(
                 )
             }
 
-            // Bed Time Options
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -549,7 +354,6 @@ private fun SetAlarmCard(
                 }
             }
 
-            // Recurring Days Selector
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -565,13 +369,7 @@ private fun SetAlarmCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     val daysOfWeek = listOf(
-                        1 to "M",
-                        2 to "T",
-                        3 to "W",
-                        4 to "T",
-                        5 to "F",
-                        6 to "S",
-                        7 to "S"
+                        1 to "M", 2 to "T", 3 to "W", 4 to "T", 5 to "F", 6 to "S", 7 to "S"
                     )
                     daysOfWeek.forEach { (dayNum, dayLabel) ->
                         DayChip(
@@ -599,7 +397,6 @@ private fun SetAlarmCard(
                 modifier = Modifier.padding(top = 8.dp)
             )
             
-            // Sleep Tip - show for recommended cycle
             AnimatedVisibility(
                 visible = suggestions.isNotEmpty(),
                 enter = fadeIn() + scaleIn(),
@@ -608,7 +405,6 @@ private fun SetAlarmCard(
                 SleepTipCard(cycles = 6)
             }
 
-            // Scrollable Suggestions
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -630,11 +426,11 @@ private fun SetAlarmCard(
 @Composable
 private fun ActiveAlarmCard(
     alarm: AlarmItem,
-    followUpAlarms: List<FollowUpAlarm>,
+    followUpAlarms: List<AlarmItem>,
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit,
     onAddFollowUp: () -> Unit,
-    onDeleteFollowUp: (FollowUpAlarm) -> Unit
+    onDeleteFollowUp: (Int) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     
@@ -669,7 +465,6 @@ private fun ActiveAlarmCard(
                 )
             }
 
-            // Large alarm time display
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -703,7 +498,6 @@ private fun ActiveAlarmCard(
                 )
             }
 
-            // Follow-up alarms section
             if (followUpAlarms.isNotEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -712,13 +506,12 @@ private fun ActiveAlarmCard(
                     followUpAlarms.forEach { followUp ->
                         FollowUpAlarmItem(
                             followUp = followUp,
-                            onDelete = { onDeleteFollowUp(followUp) }
+                            onDelete = { onDeleteFollowUp(followUp.id) }
                         )
                     }
                 }
             }
 
-            // Add follow-up button
             OutlinedButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -734,7 +527,6 @@ private fun ActiveAlarmCard(
                 Text("Add Reminder", fontSize = 13.sp)
             }
 
-            // Delete button
             Button(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -752,7 +544,7 @@ private fun ActiveAlarmCard(
 
 @Composable
 private fun FollowUpAlarmItem(
-    followUp: FollowUpAlarm,
+    followUp: AlarmItem,
     onDelete: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -788,11 +580,13 @@ private fun FollowUpAlarmItem(
                         fontWeight = FontWeight.Bold,
                         color = Color.Black
                     )
-                    Text(
-                        text = "+${followUp.minutesAfter} min reminder",
-                        fontSize = 11.sp,
-                        color = Color(0xFFE65100)
-                    )
+                    followUp.label?.let{
+                        Text(
+                            text = it,
+                            fontSize = 11.sp,
+                            color = Color(0xFFE65100)
+                        )
+                    }
                 }
             }
             IconButton(onClick = {
@@ -835,7 +629,6 @@ private fun SuggestionOption(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Sleep Quality Icon
                 Icon(
                     imageVector = sleepQuality.icon,
                     contentDescription = null,
@@ -863,7 +656,6 @@ private fun SuggestionOption(
                 }
             }
 
-            // Quality Badge
             Box(
                 modifier = Modifier
                     .background(sleepQuality.color.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
@@ -891,15 +683,8 @@ private fun PermissionWarningCard(onGrant: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "⚠️ Enable Notifications",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Grant permission so alarms ring reliably",
-                fontSize = 12.sp
-            )
+            Text("⚠️ Enable Notifications", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("Grant permission so alarms ring reliably", fontSize = 12.sp)
             Button(
                 onClick = onGrant,
                 modifier = Modifier.fillMaxWidth(),
@@ -916,9 +701,7 @@ private fun AddFollowUpDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
-    var minutesState by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue("5"))
-    }
+    var minutesState by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("5")) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -936,17 +719,12 @@ private fun AddFollowUpDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                val minutes = minutesState.text.toIntOrNull() ?: 5
-                onConfirm(minutes)
-            }) {
+            Button(onClick = { onConfirm(minutesState.text.toIntOrNull() ?: 5) }) {
                 Text("Add")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }
@@ -958,62 +736,39 @@ private fun TimeSelectionDialog(
     onDismiss: () -> Unit,
     onConfirm: (LocalTime) -> Unit
 ) {
-    val timePickerState = rememberTimePickerState(
-        initialHour = initialTime.hour,
-        initialMinute = initialTime.minute,
-        is24Hour = false
-    )
+    val timePickerState = rememberTimePickerState(initialTime.hour, initialTime.minute, false)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Time") },
         text = { TimePicker(state = timePickerState) },
         confirmButton = {
-            Button(onClick = {
-                onConfirm(LocalTime.of(timePickerState.hour, timePickerState.minute))
-            }) {
+            Button(onClick = { onConfirm(LocalTime.of(timePickerState.hour, timePickerState.minute)) }) {
                 Text("Set")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }
 
 private fun promptExactAlarmPermission(context: android.content.Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(intent)
+        context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        })
     }
 }
 
 private fun isNotificationPermissionGranted(context: android.content.Context): Boolean {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
-    return ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.POST_NOTIFICATIONS
-    ) == PackageManager.PERMISSION_GRANTED
-}
-
-private fun isMicrophonePermissionGranted(context: android.content.Context): Boolean {
-    return ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.RECORD_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED
+    return ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 }
 
 private fun formatLocalTime(localTime: LocalTime): String {
     val formatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
-    val date = Date.from(
-        localTime.atDate(LocalDate.now())
-            .atZone(ZoneId.systemDefault())
-            .toInstant()
-    )
-    return formatter.format(date)
+    return formatter.format(Date.from(localTime.atDate(LocalDate.now()).atZone(ZoneId.systemDefault()).toInstant()))
 }
 
 private fun formatEpochMillisTime(epochMillis: Long): String =
@@ -1029,14 +784,6 @@ private fun formatDayLabel(epochMillis: Long): String {
     }
 }
 
-private fun formatDurationMinutes(minutes: Int): String {
-    val hours = minutes / 60
-    val mins = minutes % 60
-    return if (mins == 0) "${hours}h sleep" else "${hours}h ${mins}m sleep"
-}
-
-// ============ NEW UI COMPONENTS ============
-
 @Composable
 private fun TimeUntilAlarmCard(triggerAtMillis: Long) {
     var currentTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -1044,7 +791,7 @@ private fun TimeUntilAlarmCard(triggerAtMillis: Long) {
     LaunchedEffect(Unit) {
         while (true) {
             currentTimeMillis = System.currentTimeMillis()
-            delay(1000L) // Update every second
+            delay(1000L)
         }
     }
     
@@ -1058,46 +805,24 @@ private fun TimeUntilAlarmCard(triggerAtMillis: Long) {
         exit = fadeOut() + scaleOut()
     ) {
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .animateContentSize(),
+            modifier = Modifier.fillMaxWidth().animateContentSize(),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1A237E)),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.WatchLater,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(32.dp)
-                )
-                Text(
-                    text = "Alarm in",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "${hours}h ${minutes}m",
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Icon(Icons.Default.WatchLater, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(32.dp))
+                Text("Alarm in", fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
+                Text("${hours}h ${minutes}m", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 
-                // Progress bar
-                val progress = 1f - (timeUntil.toFloat() / (8 * 60 * 60 * 1000)) // Assuming 8h max
+                val progress = 1f - (timeUntil.toFloat() / (8 * 60 * 60 * 1000))
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp),
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
                     color = Color(0xFF4CAF50),
                     trackColor = Color.White.copy(alpha = 0.2f)
                 )
@@ -1110,44 +835,16 @@ private fun TimeUntilAlarmCard(triggerAtMillis: Long) {
 private fun QuickActionChips(onQuickSelect: (Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
     
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = "⚡ Quick Sleep In:",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF3F51B5)
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf(
-                "15 min" to 15,
-                "30 min" to 30,
-                "1 hour" to 60
-            ).forEach { (label, minutes) ->
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("⚡ Quick Sleep In:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF3F51B5))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("15 min" to 15, "30 min" to 30, "1 hour" to 60).forEach { (label, minutes) ->
                 AssistChip(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onQuickSelect(minutes)
-                    },
+                    onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onQuickSelect(minutes) },
                     label = { Text(label, fontSize = 12.sp) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Schedule,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    },
+                    leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     modifier = Modifier.weight(1f),
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = Color.White,
-                        labelColor = Color(0xFF5C6BC0),
-                        leadingIconContentColor = Color(0xFF5C6BC0)
-                    )
+                    colors = AssistChipDefaults.assistChipColors(containerColor = Color.White, labelColor = Color(0xFF5C6BC0), leadingIconContentColor = Color(0xFF5C6BC0))
                 )
             }
         }
@@ -1165,44 +862,25 @@ private fun SleepTipCard(cycles: Int) {
         6 to "⭐ 9 hours - optimal sleep for full recovery!"
     )
     
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn() + scaleIn()
-    ) {
+    AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn()) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4))
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.TipsAndUpdates,
-                    contentDescription = null,
-                    tint = Color(0xFFF57F17),
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = tips[cycles] ?: "💡 Sleep in 90-minute cycles for optimal rest",
-                    fontSize = 12.sp,
-                    color = Color(0xFF827717),
-                    lineHeight = 16.sp
-                )
+                Icon(Icons.Default.TipsAndUpdates, contentDescription = null, tint = Color(0xFFF57F17), modifier = Modifier.size(20.dp))
+                Text(tips[cycles] ?: "💡 Sleep in 90-minute cycles for optimal rest", fontSize = 12.sp, color = Color(0xFF827717), lineHeight = 16.sp)
             }
         }
     }
 }
 
-private data class SleepQuality(
-    val label: String,
-    val color: Color,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector
-)
+private data class SleepQuality(val label: String, val color: Color, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 private fun getSleepQuality(cycles: Int): SleepQuality {
     return when {
@@ -1214,125 +892,14 @@ private fun getSleepQuality(cycles: Int): SleepQuality {
     }
 }
 
-private enum class BedTimeOption {
-    SleepNow,
-    Custom
-}
-
-private data class FollowUpAlarm(
-    val id: Int,
-    val minutesAfter: Int,
-    val triggerAtMillis: Long
-)
-
-private data class CreateAlarmDialogState(
-    val triggerAtMillis: Long,
-    val cycles: Int?,
-    val plannedBedTimeMillis: Long?
-)
-
 @Composable
-private fun VoiceCommandDialog(
-    status: String,
-    isListening: Boolean,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = null,
-                    tint = if (isListening) Color(0xFFD32F2F) else Color(0xFF5C6BC0),
-                    modifier = Modifier.size(24.dp)
-                )
-                Text("Voice Command")
-            }
-        },
-        text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                // Animated microphone icon
-                if (isListening) {
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .background(Color(0xFFD32F2F).copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = null,
-                            tint = Color(0xFFD32F2F),
-                            modifier = Modifier.size(48.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = status,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    color = Color.Black
-                )
-
-                if (isListening) {
-                    Text(
-                        text = "Try saying:\n\"Set alarm for 7 AM\"\n\"Wake me in 30 minutes\"\n\"Alarm at 10:30 PM\"",
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        color = Color.Gray,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun DayChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
+private fun DayChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     
     Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(if (isSelected) Color(0xFF5C6BC0) else Color.White)
-            .border(
-                width = 1.dp,
-                color = if (isSelected) Color(0xFF5C6BC0) else Color.Gray.copy(alpha = 0.3f),
-                shape = CircleShape
-            )
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            },
+        modifier = Modifier.size(40.dp).clip(CircleShape).background(if (isSelected) Color(0xFF5C6BC0) else Color.White).border(1.dp, if (isSelected) Color(0xFF5C6BC0) else Color.Gray.copy(alpha = 0.3f), CircleShape).clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) Color.White else Color.Gray
-        )
+        Text(label, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) Color.White else Color.Gray)
     }
 }
