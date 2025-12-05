@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs407.afinal.alarm.AlarmManager
+import com.cs407.afinal.sleep.SleepViewModel
 import com.cs407.afinal.ui.SmartSleepApp
 import com.cs407.afinal.ui.theme.FinalTheme
 import com.cs407.afinal.viewmodel.AccountViewModel
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
         // Set the main content of the activity to be our Jetpack Compose application UI.
         setContent {
             val accountViewModel: AccountViewModel = viewModel()
+            val sleepViewModel: SleepViewModel = viewModel()
             val accountUiState by accountViewModel.uiState.collectAsState()
             
             FinalTheme(darkTheme = accountUiState.isDarkMode) {
@@ -68,7 +70,10 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     // SmartSleepApp is the root composable of the application's UI.
-                    SmartSleepApp(accountViewModel = accountViewModel)
+                    SmartSleepApp(
+                        accountViewModel = accountViewModel,
+                        sleepViewModel = sleepViewModel
+                    )
                 }
             }
         }
