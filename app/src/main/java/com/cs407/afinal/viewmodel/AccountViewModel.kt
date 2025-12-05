@@ -36,7 +36,8 @@ data class AccountUiState(
     val autoAlarmEnabled: Boolean = false,
     val autoAlarmHour: Int = 22,
     val autoAlarmMinute: Int = 30,
-    val autoAlarmInactivityMinutes: Int = 15
+    val autoAlarmInactivityMinutes: Int = 15,
+    val isDarkMode: Boolean = false
 )
 
 class AccountViewModel(application: Application) : AndroidViewModel(application) {
@@ -45,13 +46,16 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val alarmManager = AlarmManager(application)
 
+    private val prefs = application.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+
     private val _uiState = MutableStateFlow(
         AccountUiState(
             currentUserEmail = auth.currentUser?.email,
             autoAlarmEnabled = alarmManager.isAutoAlarmEnabled(),  // CHANGED
             autoAlarmHour = alarmManager.getAutoAlarmTriggerTime().first,  // CHANGED
             autoAlarmMinute = alarmManager.getAutoAlarmTriggerTime().second,  // CHANGED
-            autoAlarmInactivityMinutes = alarmManager.getAutoAlarmInactivityMinutes()  // CHANGED
+            autoAlarmInactivityMinutes = alarmManager.getAutoAlarmInactivityMinutes(),  // CHANGED
+            isDarkMode = prefs.getBoolean("dark_mode", false)
         )
     )
     val uiState: StateFlow<AccountUiState> = _uiState.asStateFlow()
@@ -185,6 +189,11 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             syncAutoAlarmSettingsToFirebase()
         }
+    }
+
+    fun setDarkMode(enabled: Boolean) {
+        prefs.edit().putBoolean("dark_mode", enabled).apply()
+        _uiState.update { it.copy(isDarkMode = enabled) }
     }
 
     private suspend fun syncAutoAlarmSettingsToFirebase() {

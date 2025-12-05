@@ -16,11 +16,15 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs407.afinal.alarm.AlarmManager
 import com.cs407.afinal.ui.SmartSleepApp
 import com.cs407.afinal.ui.theme.FinalTheme
+import com.cs407.afinal.viewmodel.AccountViewModel
 
 /**
  * MainActivity is the primary activity for the application.
@@ -54,14 +58,17 @@ class MainActivity : ComponentActivity() {
 
         // Set the main content of the activity to be our Jetpack Compose application UI.
         setContent {
-            FinalTheme {
+            val accountViewModel: AccountViewModel = viewModel()
+            val accountUiState by accountViewModel.uiState.collectAsState()
+            
+            FinalTheme(darkTheme = accountUiState.isDarkMode) {
                 // A Surface container using the 'background' color from the theme.
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     // SmartSleepApp is the root composable of the application's UI.
-                    SmartSleepApp()
+                    SmartSleepApp(accountViewModel = accountViewModel)
                 }
             }
         }

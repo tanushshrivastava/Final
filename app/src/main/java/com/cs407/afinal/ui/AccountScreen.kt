@@ -302,6 +302,41 @@ private fun SignedInContent(
             )
         }
 
+        // Settings Card for "Appearance".
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Appearance",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                
+                // Row for the "Dark Mode" switch.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Dark Mode", fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "Use dark theme throughout the app",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = uiState.isDarkMode,
+                        onCheckedChange = { viewModel.setDarkMode(it) }
+                    )
+                }
+            }
+        }
+
         // Settings Card for "Auto Sleep Alarm".
         Card(
             modifier = Modifier.fillMaxWidth()

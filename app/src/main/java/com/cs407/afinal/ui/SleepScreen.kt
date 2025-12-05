@@ -107,7 +107,7 @@ fun SleepCalculatorScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
-            modifier = Modifier.fillMaxSize().background(Color(0xFFE8EAF6)).padding(padding),
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding),
             contentAlignment = Alignment.TopCenter
         ) {
             Column(
@@ -115,7 +115,7 @@ fun SleepCalculatorScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Set Alarm", fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                Text("Set Alarm", fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp), color = MaterialTheme.colorScheme.onBackground)
 
                 if (true && !hasNotificationPermission) {
                     PermissionWarningCard { notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
@@ -226,7 +226,7 @@ private fun AutoAlarmStatusCard(status: AutoAlarmStatus) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         ) {
             Row(
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -277,7 +277,7 @@ private fun SetAlarmCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFD6DBFA)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
@@ -302,7 +302,7 @@ private fun SetAlarmCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
                     .padding(vertical = 20.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -315,7 +315,7 @@ private fun SetAlarmCard(
                     text = displayTime,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -439,7 +439,7 @@ private fun ActiveAlarmCard(
             .fillMaxWidth()
             .animateContentSize(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFC5E1A5)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
@@ -468,7 +468,7 @@ private fun ActiveAlarmCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
                     .padding(vertical = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -479,7 +479,7 @@ private fun ActiveAlarmCard(
                         text = formatEpochMillisTime(alarm.triggerAtMillis),
                         fontSize = 48.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = formatDayLabel(alarm.triggerAtMillis),
@@ -554,7 +554,7 @@ private fun FollowUpAlarmItem(
             .fillMaxWidth()
             .animateContentSize(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE0B2))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
     ) {
         Row(
             modifier = Modifier
@@ -578,7 +578,7 @@ private fun FollowUpAlarmItem(
                         text = formatEpochMillisTime(followUp.triggerAtMillis),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     followUp.label?.let{
                         Text(
@@ -612,7 +612,7 @@ private fun SuggestionOption(
             .fillMaxWidth()
             .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
         shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         onClick = {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             onClick()
@@ -641,7 +641,7 @@ private fun SuggestionOption(
                         text = formatEpochMillisTime(suggestion.displayMillis),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -677,7 +677,7 @@ private fun PermissionWarningCard(onGrant: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE0B2))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -807,7 +807,7 @@ private fun TimeUntilAlarmCard(triggerAtMillis: Long) {
         Card(
             modifier = Modifier.fillMaxWidth().animateContentSize(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A237E)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(
@@ -844,7 +844,11 @@ private fun QuickActionChips(onQuickSelect: (Int) -> Unit) {
                     label = { Text(label, fontSize = 12.sp) },
                     leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     modifier = Modifier.weight(1f),
-                    colors = AssistChipDefaults.assistChipColors(containerColor = Color.White, labelColor = Color(0xFF5C6BC0), leadingIconContentColor = Color(0xFF5C6BC0))
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        labelColor = MaterialTheme.colorScheme.primary,
+                        leadingIconContentColor = MaterialTheme.colorScheme.primary
+                    )
                 )
             }
         }
@@ -866,7 +870,7 @@ private fun SleepTipCard(cycles: Int) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -897,9 +901,9 @@ private fun DayChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
     val haptic = LocalHapticFeedback.current
     
     Box(
-        modifier = Modifier.size(40.dp).clip(CircleShape).background(if (isSelected) Color(0xFF5C6BC0) else Color.White).border(1.dp, if (isSelected) Color(0xFF5C6BC0) else Color.Gray.copy(alpha = 0.3f), CircleShape).clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() },
+        modifier = Modifier.size(40.dp).clip(CircleShape).background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface).border(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), CircleShape).clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(label, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) Color.White else Color.Gray)
+        Text(label, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
