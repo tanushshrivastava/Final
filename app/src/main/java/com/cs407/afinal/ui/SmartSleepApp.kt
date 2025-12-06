@@ -14,15 +14,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cs407.afinal.sleep.SleepViewModel
+import com.cs407.afinal.viewmodel.AccountViewModel
 
 @Composable
-fun SmartSleepApp() {
+fun SmartSleepApp(
+    accountViewModel: AccountViewModel = viewModel(),
+    sleepViewModel: SleepViewModel = viewModel()
+) {
     val navController = rememberNavController()
     val destinations = remember { listOf(BottomDestination.Alarm, BottomDestination.Schedule, BottomDestination.Account) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -57,12 +63,16 @@ fun SmartSleepApp() {
             modifier = Modifier.padding(padding)
         ) {
             composable(BottomDestination.Alarm.route) {
-                SleepCalculatorScreen()
+                SleepCalculatorScreen(viewModel = sleepViewModel)
             }
             composable(BottomDestination.Schedule.route) {
+<<<<<<< HEAD
+=======
+                ScheduleScreen(viewModel = sleepViewModel)
+>>>>>>> main
             }
             composable(BottomDestination.Account.route) {
-                AccountScreen()
+                AccountScreen(viewModel = accountViewModel)
             }
         }
     }
