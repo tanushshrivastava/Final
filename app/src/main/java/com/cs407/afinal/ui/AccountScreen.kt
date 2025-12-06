@@ -30,6 +30,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,7 +75,8 @@ import java.util.Locale
 @Composable
 fun AccountScreen(
     modifier: Modifier = Modifier,
-    viewModel: AccountViewModel = viewModel()
+    viewModel: AccountViewModel = viewModel(),
+    onNavigateToTips: () -> Unit = {}
 ) {
     // Collect the UI state from the ViewModel in a lifecycle-aware manner.
     // This ensures that the UI always reflects the latest state.
@@ -116,6 +124,7 @@ fun AccountScreen(
                 email = currentUserEmail,
                 onSignOut = viewModel::signOut, // Pass the signOut function from the ViewModel.
                 viewModel = viewModel,
+                onNavigateToTips = onNavigateToTips,
                 modifier = Modifier
                     .padding(padding) // Apply padding from the Scaffold.
                     .fillMaxSize()
@@ -129,6 +138,7 @@ fun AccountScreen(
                 onConfirmPasswordChange = viewModel::onConfirmPasswordChanged,
                 onSubmit = viewModel::submit,
                 onToggleMode = viewModel::toggleMode, // Function to switch between sign-in/sign-up.
+                onNavigateToTips = onNavigateToTips,
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
@@ -160,6 +170,7 @@ private fun AuthForm(
     onConfirmPasswordChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onToggleMode: () -> Unit,
+    onNavigateToTips: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // A Column to arrange the UI elements vertically.
@@ -249,6 +260,45 @@ private fun AuthForm(
                     else "Already have an account? Sign in"
                 )
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Sleep Tips button
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToTips() },
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = Color(0xFFFFB300),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Sleep Tips",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Go to tips",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
@@ -269,7 +319,8 @@ private fun SignedInContent(
     email: String,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: AccountViewModel
+    viewModel: AccountViewModel,
+    onNavigateToTips: () -> Unit = {}
 ) {
     // Collect the UI state to get the latest settings values.
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -448,6 +499,51 @@ private fun SignedInContent(
                 }
             }
         }
+
+        // Sleep Tips Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onNavigateToTips() },
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lightbulb,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB300),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "Sleep Tips",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Learn how to improve your sleep",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Go to tips",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         // Sign-out button at the bottom.
         Button(
             onClick = onSignOut,

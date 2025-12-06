@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -30,7 +33,15 @@ fun SmartSleepApp(
     sleepViewModel: SleepViewModel = viewModel()
 ) {
     val navController = rememberNavController()
-    val destinations = remember { listOf(BottomDestination.Alarm, BottomDestination.Schedule, BottomDestination.Account) }
+    val destinations = remember { 
+        listOf(
+            BottomDestination.Alarm, 
+            BottomDestination.Schedule,
+            BottomDestination.Trends,
+            BottomDestination.Journal,
+            BottomDestination.Account
+        ) 
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
@@ -66,13 +77,26 @@ fun SmartSleepApp(
                 SleepCalculatorScreen(viewModel = sleepViewModel)
             }
             composable(BottomDestination.Schedule.route) {
-<<<<<<< HEAD
-=======
                 ScheduleScreen(viewModel = sleepViewModel)
->>>>>>> main
+            }
+            composable(BottomDestination.Trends.route) {
+                TrendsScreen(viewModel = sleepViewModel)
+            }
+            composable(BottomDestination.Journal.route) {
+                JournalScreen()
+            }
+            composable(BottomDestination.Tips.route) {
+                TipsScreen(
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(BottomDestination.Account.route) {
-                AccountScreen(viewModel = accountViewModel)
+                AccountScreen(
+                    viewModel = accountViewModel,
+                    onNavigateToTips = {
+                        navController.navigate(BottomDestination.Tips.route)
+                    }
+                )
             }
         }
     }
@@ -85,5 +109,8 @@ private sealed class BottomDestination(
 ) {
     object Alarm : BottomDestination("alarm", "Alarm", Icons.Outlined.Alarm)
     object Schedule : BottomDestination("schedule", "Schedule", Icons.Outlined.CalendarToday)
+    object Trends : BottomDestination("trends", "Trends", Icons.Outlined.Insights)
+    object Journal : BottomDestination("journal", "Journal", Icons.Outlined.Book)
+    object Tips : BottomDestination("tips", "Tips", Icons.Outlined.Lightbulb)
     object Account : BottomDestination("account", "Account", Icons.Outlined.AccountCircle)
 }
