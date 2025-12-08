@@ -86,7 +86,7 @@ class InactivityMonitorService : Service(), SensorEventListener {
     private fun checkInactivity() {
         val now = System.currentTimeMillis()
         val inactiveDurationMs = now - lastMovementTime
-        val thresholdMs = alarmManager.getAutoAlarmInactivityMinutes() * 60 * 1000L
+        val thresholdMs = alarmManager.getAutoAlarmInactivityMillis()
 
         updateNotification()
         broadcastStatus()
@@ -122,6 +122,8 @@ class InactivityMonitorService : Service(), SensorEventListener {
         serviceScope.launch {
             alarmManager.syncAlarmToFirebase(alarm)
         }
+
+        broadcastAlarmCreated(alarmId, wakeUpTime)
     }
 
     private fun updateNotification() {
@@ -142,15 +144,16 @@ class InactivityMonitorService : Service(), SensorEventListener {
 
     private fun createNotification(): Notification {
         val inactivityMinutes = alarmManager.getAutoAlarmInactivityMinutes()
+        val inactivityMillis = alarmManager.getAutoAlarmInactivityMillis()
         val (triggerHour, triggerMinute) = alarmManager.getAutoAlarmTriggerTime()
-        val inactivityThresholdMs = inactivityMinutes * 60 * 1000L
-        val timeUntilInactiveSeconds = (inactivityThresholdMs - (System.currentTimeMillis() - lastMovementTime)) / 1000
+        val timeUntilInactiveSeconds = (inactivityMillis - (System.currentTimeMillis() - lastMovementTime)) / 1000
 
         val contentText = if (shouldMonitorNow()) {
+            val thresholdLabel = if (inactivityMinutes < 1) "15s" else "${inactivityMinutes}m"
             if (timeUntilInactiveSeconds > 0) {
-                "Still for ${timeUntilInactiveSeconds}s / ${inactivityMinutes * 60}s"
+                "Still for ${timeUntilInactiveSeconds}s / $thresholdLabel"
             } else {
-                "Monitoring active - ${inactivityMinutes}m threshold"
+                "Monitoring active - $thresholdLabel threshold"
             }
         } else {
             "Waiting until ${String.format("%02d:%02d", triggerHour, triggerMinute)}"
@@ -176,10 +179,18 @@ class InactivityMonitorService : Service(), SensorEventListener {
 
     private fun broadcastStatus(isReset: Boolean = false) {
         val intent = Intent(ACTION_STATUS_UPDATE)
-        val timeUntilTrigger = (alarmManager.getAutoAlarmInactivityMinutes() * 60 * 1000L) - (System.currentTimeMillis() - lastMovementTime)
+        val timeUntilTrigger = alarmManager.getAutoAlarmInactivityMillis() - (System.currentTimeMillis() - lastMovementTime)
         intent.putExtra(EXTRA_TIME_UNTIL_TRIGGER, timeUntilTrigger)
         intent.putExtra(EXTRA_IS_RESET, isReset)
         intent.putExtra(EXTRA_IS_MONITORING, shouldMonitorNow())
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+    }
+
+    private fun broadcastAlarmCreated(alarmId: Int, triggerAtMillis: Long) {
+        val intent = Intent(ACTION_AUTO_ALARM_CREATED).apply {
+            putExtra(EXTRA_NEW_ALARM_ID, alarmId)
+            putExtra(EXTRA_NEW_ALARM_TRIGGER, triggerAtMillis)
+        }
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
@@ -196,9 +207,12 @@ class InactivityMonitorService : Service(), SensorEventListener {
     companion object {
         const val ACTION_RESET_INACTIVITY_TIMER = "com.cs407.afinal.ACTION_RESET_INACTIVITY_TIMER"
         const val ACTION_STATUS_UPDATE = "com.cs407.afinal.ACTION_STATUS_UPDATE"
+        const val ACTION_AUTO_ALARM_CREATED = "com.cs407.afinal.ACTION_AUTO_ALARM_CREATED"
         const val EXTRA_TIME_UNTIL_TRIGGER = "time_until_trigger"
         const val EXTRA_IS_RESET = "is_reset"
         const val EXTRA_IS_MONITORING = "is_monitoring"
+        const val EXTRA_NEW_ALARM_ID = "new_alarm_id"
+        const val EXTRA_NEW_ALARM_TRIGGER = "new_alarm_trigger"
         private const val CHANNEL_ID = "inactivity_monitor_channel"
         private const val NOTIFICATION_ID = 2001
         private const val MOVEMENT_THRESHOLD = 10.5f

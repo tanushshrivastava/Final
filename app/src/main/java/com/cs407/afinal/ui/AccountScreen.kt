@@ -37,6 +37,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -87,6 +89,7 @@ fun AccountScreen(
     // Extract error and success messages for easier access.
     val errorMessage = uiState.errorMessage
     val successMessage = uiState.successMessage
+    val haptic = LocalHapticFeedback.current
 
     // Remember a SnackbarHostState to control the display of Snackbars.
     val snackbarHostState = remember { SnackbarHostState() }
@@ -116,7 +119,30 @@ fun AccountScreen(
     // Here, we use it to host the Snackbar.
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        topBar = {
+            // Quick access logout in the top bar when signed in.
+            if (!uiState.currentUserEmail.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Account",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    TextButton(onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.signOut()
+                    }) {
+                        Text("Log Out")
+                    }
+                }
+            }
+        }
     ) { padding ->
         // Check if a user is currently signed in by looking at their email in the UI state.
         val currentUserEmail = uiState.currentUserEmail
@@ -484,7 +510,8 @@ private fun SignedInContent(
                                 .setTitle("Inactivity Duration")
                                 .setItems(
                                     arrayOf(
-                                        "1 minute (test)",
+                                        "15 seconds (test)",
+                                        "1 minute",
                                         "5 minutes",
                                         "15 minutes",
                                         "30 minutes",
@@ -493,11 +520,12 @@ private fun SignedInContent(
                                 ) { _, which ->
                                     // Map the selected index to the corresponding minute value.
                                     val minutes = when (which) {
-                                        0 -> 1
-                                        1 -> 5
-                                        2 -> 15
-                                        3 -> 30
-                                        4 -> 60
+                                        0 -> -1 // special flag for 15s
+                                        1 -> 1
+                                        2 -> 5
+                                        3 -> 15
+                                        4 -> 30
+                                        5 -> 60
                                         else -> 15 // Default value.
                                     }
                                     // Update the ViewModel with the selected duration.
@@ -511,7 +539,7 @@ private fun SignedInContent(
                 ) {
                     Text("Inactivity Duration")
                     Text(
-                        text = "${uiState.autoAlarmInactivityMinutes} minutes",
+                        text = if (uiState.autoAlarmInactivityMinutes < 1) "15 seconds (test)" else "${uiState.autoAlarmInactivityMinutes} minutes",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary
                     )

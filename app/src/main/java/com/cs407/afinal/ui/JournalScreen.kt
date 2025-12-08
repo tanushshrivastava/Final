@@ -95,6 +95,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,6 +118,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Instant
+import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -165,12 +174,24 @@ val dreamTags = listOf(
 fun JournalScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
     var entries by remember { mutableStateOf(loadJournalEntries(context)) }
     var showNewEntrySheet by remember { mutableStateOf(false) }
     var selectedEntry by remember { mutableStateOf<JournalEntry?>(null) }
     var entryToDelete by remember { mutableStateOf<JournalEntry?>(null) }
 
-    LaunchedEffect(entries) { saveJournalEntries(context, entries) }
+    LaunchedEffect(Unit) {
+        val remote = fetchJournalEntriesRemote()
+        if (remote.isNotEmpty()) {
+            entries = remote
+            saveJournalEntries(context, remote)
+        }
+    }
+
+    LaunchedEffect(entries) {
+        saveJournalEntries(context, entries)
+        coroutineScope.launch { uploadJournalEntriesRemote(entries) }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -705,3 +726,68 @@ private fun saveJournalEntries(context: Context, entries: List<JournalEntry>) {
     prefs.edit { putString("entries", Json.encodeToString(entries)) }
 }
 
+private suspend fun fetchJournalEntriesRemote(): List<JournalEntry> = withContext(Dispatchers.IO) {
+    val user = FirebaseAuth.getInstance().currentUser ?: return@withContext emptyList()
+    val firestore = FirebaseFirestore.getInstance()
+    runCatching {
+        val snapshot = firestore.collection("users")
+            .document(user.uid)
+            .collection("journal")
+            .orderBy("date")
+            .get()
+            .await()
+        snapshot.documents.mapNotNull { it.toJournalEntry() }
+    }.getOrElse {
+        Log.w("JournalScreen", "Failed to fetch journal entries", it)
+        emptyList()
+    }
+}
+
+private suspend fun uploadJournalEntriesRemote(entries: List<JournalEntry>) = withContext(Dispatchers.IO) {
+    val user = FirebaseAuth.getInstance().currentUser ?: return@withContext
+    val firestore = FirebaseFirestore.getInstance()
+    runCatching {
+        val batch = firestore.batch()
+        val coll = firestore.collection("users").document(user.uid).collection("journal")
+        entries.forEach { entry ->
+            val doc = coll.document(entry.id.toString())
+            batch.set(doc, entry.toFirestoreMap())
+        }
+        batch.commit().await()
+    }.onFailure { Log.w("JournalScreen", "Failed to upload journal entries", it) }
+}
+
+private fun JournalEntry.toFirestoreMap(): Map<String, Any?> = mapOf(
+    "id" to id,
+    "date" to date,
+    "sleepQuality" to sleepQuality,
+    "moodOnWake" to moodOnWake,
+    "sleepFactors" to sleepFactors,
+    "dreamDescription" to dreamDescription,
+    "dreamTags" to dreamTags,
+    "notes" to notes,
+    "hoursSlept" to hoursSlept
+)
+
+private fun DocumentSnapshot.toJournalEntry(): JournalEntry? {
+    val id = getLong("id") ?: System.currentTimeMillis()
+    val date = getString("date") ?: return null
+    val sleepQuality = getLong("sleepQuality")?.toInt() ?: 3
+    val moodOnWake = getLong("moodOnWake")?.toInt() ?: 3
+    val sleepFactors = get("sleepFactors") as? List<String> ?: emptyList()
+    val dreamDescription = getString("dreamDescription") ?: ""
+    val dreamTags = get("dreamTags") as? List<String> ?: emptyList()
+    val notes = getString("notes") ?: ""
+    val hoursSlept = (getDouble("hoursSlept") ?: getLong("hoursSlept")?.toDouble() ?: 7.0).toFloat()
+    return JournalEntry(
+        id = id,
+        date = date,
+        sleepQuality = sleepQuality,
+        moodOnWake = moodOnWake,
+        sleepFactors = sleepFactors,
+        dreamDescription = dreamDescription,
+        dreamTags = dreamTags,
+        notes = notes,
+        hoursSlept = hoursSlept
+    )
+}

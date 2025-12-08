@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import android.util.Log
 import com.cs407.afinal.InactivityMonitorService
 import com.cs407.afinal.alarm.AlarmItem
 import com.cs407.afinal.alarm.AlarmManager
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
@@ -45,25 +47,32 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val isMonitoring = intent.getBooleanExtra(InactivityMonitorService.EXTRA_IS_MONITORING, false)
-            val timeUntilTrigger = intent.getLongExtra(InactivityMonitorService.EXTRA_TIME_UNTIL_TRIGGER, 0L)
-            val wasReset = intent.getBooleanExtra(InactivityMonitorService.EXTRA_IS_RESET, false)
-            
-            _uiState.update {
-                it.copy(
-                    autoAlarmStatus = it.autoAlarmStatus.copy(
-                        isEnabled = alarmManager.isAutoAlarmEnabled(),
-                        isMonitoring = isMonitoring,
-                        timeUntilTrigger = timeUntilTrigger,
-                        wasJustReset = wasReset
-                    )
-                )
-            }
-            
-            if (wasReset) {
-                viewModelScope.launch {
-                    delay(2000)
-                    _uiState.update { it.copy(autoAlarmStatus = it.autoAlarmStatus.copy(wasJustReset = false)) }
+            when (intent.action) {
+                InactivityMonitorService.ACTION_STATUS_UPDATE -> {
+                    val isMonitoring = intent.getBooleanExtra(InactivityMonitorService.EXTRA_IS_MONITORING, false)
+                    val timeUntilTrigger = intent.getLongExtra(InactivityMonitorService.EXTRA_TIME_UNTIL_TRIGGER, 0L)
+                    val wasReset = intent.getBooleanExtra(InactivityMonitorService.EXTRA_IS_RESET, false)
+
+                    _uiState.update {
+                        it.copy(
+                            autoAlarmStatus = it.autoAlarmStatus.copy(
+                                isEnabled = alarmManager.isAutoAlarmEnabled(),
+                                isMonitoring = isMonitoring,
+                                timeUntilTrigger = timeUntilTrigger,
+                                wasJustReset = wasReset
+                            )
+                        )
+                    }
+
+                    if (wasReset) {
+                        viewModelScope.launch {
+                            delay(2000)
+                            _uiState.update { it.copy(autoAlarmStatus = it.autoAlarmStatus.copy(wasJustReset = false)) }
+                        }
+                    }
+                }
+                InactivityMonitorService.ACTION_AUTO_ALARM_CREATED -> {
+                    refreshState("Auto alarm scheduled")
                 }
             }
         }
@@ -75,7 +84,10 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
         handleAuthChange(auth.currentUser)
         LocalBroadcastManager.getInstance(application).registerReceiver(
             statusReceiver,
-            IntentFilter(InactivityMonitorService.ACTION_STATUS_UPDATE)
+            IntentFilter().apply {
+                addAction(InactivityMonitorService.ACTION_STATUS_UPDATE)
+                addAction(InactivityMonitorService.ACTION_AUTO_ALARM_CREATED)
+            }
         )
     }
 
@@ -188,7 +200,11 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteAlarm(alarmId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             alarmManager.deleteAlarm(alarmId)
-            alarmManager.deleteAlarmFromFirebase(alarmId)
+            alarmManager.markPendingDeletion(alarmId)
+            val deletedRemote = alarmManager.deleteAlarmFromFirebase(alarmId)
+            if (deletedRemote) {
+                alarmManager.clearPendingDeletion(alarmId)
+            }
 
             val intent = Intent(getApplication(), InactivityMonitorService::class.java).apply {
                 action = InactivityMonitorService.ACTION_RESET_INACTIVITY_TIMER
@@ -246,8 +262,9 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { syncLocalToRemote(user) }
+            runCatching { syncLocalToRemote(user) }.onFailure { Log.w(TAG, "Failed to sync local data to remote", it) }
             attachRemoteListeners(user)
+            fetchRemoteHistorySnapshot(user)
         }
     }
 
@@ -263,13 +280,20 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
                 val previous = alarmManager.loadAlarms()
-                val remoteAlarms = snapshot?.documents?.mapNotNull { alarmManager.run { it.toAlarmItem() } } ?: emptyList()
+                val pendingDeletes = alarmManager.getPendingDeletedAlarmIds()
+                val remoteAlarms = snapshot?.documents
+                    ?.mapNotNull { alarmManager.run { it.toAlarmItem() } }
+                    ?.filterNot { pendingDeletes.contains(it.id) }
+                    ?: emptyList()
                 val remoteIds = remoteAlarms.map { it.id }.toSet()
 
                 alarmManager.saveAlarms(remoteAlarms)
 
                 previous.filter { it.id !in remoteIds }.forEach { alarmManager.cancelAlarm(it.id) }
                 remoteAlarms.filter { it.isEnabled }.forEach { alarmManager.scheduleAlarm(it) }
+
+                // Clear pending deletions that are no longer present remotely
+                pendingDeletes.filterNot { remoteIds.contains(it) }.forEach { alarmManager.clearPendingDeletion(it) }
 
                 refreshState()
             }
@@ -285,10 +309,51 @@ class SleepViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    private fun fetchRemoteHistorySnapshot(user: FirebaseUser) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val snapshot = firestore.collection("users")
+                    .document(user.uid)
+                    .collection("history")
+                    .orderBy("actualDismissedMillis", Query.Direction.DESCENDING)
+                    .limit(100)
+                    .get()
+                    .await()
+                val remoteHistory = snapshot.documents.mapNotNull { alarmManager.run { it.toHistoryEntry() } }
+                if (remoteHistory.isNotEmpty()) {
+                    alarmManager.saveHistory(remoteHistory)
+                    refreshState()
+                }
+            }.onFailure { Log.w(TAG, "Failed to fetch remote history", it) }
+        }
+    }
+
     private fun detachRemoteListeners() {
         alarmsListener?.remove()
         historyListener?.remove()
         alarmsListener = null
         historyListener = null
+    }
+
+    fun syncHistoryToCloud() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = auth.currentUser
+            if (user == null) {
+                _uiState.update { it.copy(message = "Sign in to sync history") }
+                return@launch
+            }
+            runCatching {
+                alarmManager.loadHistory().forEach { alarmManager.syncHistoryToFirebase(it) }
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to sync history to cloud", error)
+                _uiState.update { it.copy(message = "Could not sync history: ${error.message ?: "Unknown error"}") }
+            }.onSuccess {
+                _uiState.update { it.copy(message = "History synced to cloud") }
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "SleepViewModel"
     }
 }

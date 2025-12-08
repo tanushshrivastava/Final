@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.afinal.InactivityMonitorService
 import com.cs407.afinal.alarm.AlarmManager
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -170,25 +171,19 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
             getApplication<Application>().stopService(intent)
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            syncAutoAlarmSettingsToFirebase()
-        }
+        viewModelScope.launch(Dispatchers.IO) { syncAutoAlarmSettingsToFirebaseSafe() }
     }
 
     fun setAutoAlarmTime(hour: Int, minute: Int) {
         alarmManager.setAutoAlarmTriggerTime(hour, minute)  // CHANGED
         _uiState.update { it.copy(autoAlarmHour = hour, autoAlarmMinute = minute) }
-        viewModelScope.launch(Dispatchers.IO) {
-            syncAutoAlarmSettingsToFirebase()
-        }
+        viewModelScope.launch(Dispatchers.IO) { syncAutoAlarmSettingsToFirebaseSafe() }
     }
 
     fun setAutoAlarmInactivityMinutes(minutes: Int) {
         alarmManager.setAutoAlarmInactivityMinutes(minutes)  // CHANGED
         _uiState.update { it.copy(autoAlarmInactivityMinutes = minutes) }
-        viewModelScope.launch(Dispatchers.IO) {
-            syncAutoAlarmSettingsToFirebase()
-        }
+        viewModelScope.launch(Dispatchers.IO) { syncAutoAlarmSettingsToFirebaseSafe() }
     }
 
     fun setDarkMode(enabled: Boolean) {
@@ -208,6 +203,11 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
             .document(user.uid)
             .set(mapOf("settings" to settings), SetOptions.merge())
             .await()
+    }
+
+    private suspend fun syncAutoAlarmSettingsToFirebaseSafe() {
+        runCatching { syncAutoAlarmSettingsToFirebase() }
+            .onFailure { Log.w("AccountViewModel", "Failed to sync auto alarm settings", it) }
     }
 
     private fun handleAuthChanged(user: FirebaseUser?) {

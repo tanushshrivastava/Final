@@ -16,6 +16,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.content.edit
 import com.cs407.afinal.MainActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -276,39 +277,47 @@ class AlarmManager(private val context: Context) {
      * Sync alarm to Firebase Firestore.
      */
     suspend fun syncAlarmToFirebase(alarm: AlarmItem) {
-        val user = auth.currentUser ?: return
-        firestore.collection("users")
-            .document(user.uid)
-            .collection("alarms")
-            .document(alarm.id.toString())
-            .set(alarm.toFirestoreMap(), SetOptions.merge())
-            .await()
+        runCatching {
+            val user = auth.currentUser ?: return
+            firestore.collection("users")
+                .document(user.uid)
+                .collection("alarms")
+                .document(alarm.id.toString())
+                .set(alarm.toFirestoreMap(), SetOptions.merge())
+                .await()
+        }.onFailure { Log.w(TAG, "Failed to sync alarm ${alarm.id} to Firebase", it) }
     }
 
     /**
      * Delete alarm from Firebase Firestore.
      */
-    suspend fun deleteAlarmFromFirebase(alarmId: Int) {
-        val user = auth.currentUser ?: return
-        firestore.collection("users")
-            .document(user.uid)
-            .collection("alarms")
-            .document(alarmId.toString())
-            .delete()
-            .await()
+    suspend fun deleteAlarmFromFirebase(alarmId: Int): Boolean {
+        return runCatching {
+            val user = auth.currentUser ?: return false
+            firestore.collection("users")
+                .document(user.uid)
+                .collection("alarms")
+                .document(alarmId.toString())
+                .delete()
+                .await()
+            true
+        }.onFailure { Log.w(TAG, "Failed to delete alarm $alarmId from Firebase", it) }
+            .getOrDefault(false)
     }
 
     /**
      * Sync history entry to Firebase Firestore.
      */
     suspend fun syncHistoryToFirebase(entry: SleepHistoryEntry) {
-        val user = auth.currentUser ?: return
-        firestore.collection("users")
-            .document(user.uid)
-            .collection("history")
-            .document(entry.id.toString())
-            .set(entry.toFirestoreMap(), SetOptions.merge())
-            .await()
+        runCatching {
+            val user = auth.currentUser ?: return
+            firestore.collection("users")
+                .document(user.uid)
+                .collection("history")
+                .document(entry.id.toString())
+                .set(entry.toFirestoreMap(), SetOptions.merge())
+                .await()
+        }.onFailure { Log.w(TAG, "Failed to sync history entry ${entry.id} to Firebase", it) }
     }
 
     // ==================== FIRESTORE MAPPERS ====================
@@ -421,6 +430,11 @@ class AlarmManager(private val context: Context) {
 
     fun getAutoAlarmInactivityMinutes(): Int = prefs.getInt(KEY_AUTO_ALARM_INACTIVITY_MINUTES, 15)
 
+    fun getAutoAlarmInactivityMillis(): Long {
+        val minutes = getAutoAlarmInactivityMinutes()
+        return if (minutes < 1) 15_000L else minutes * 60_000L
+    }
+
     fun setAutoAlarmInactivityMinutes(minutes: Int) {
         prefs.edit { putInt(KEY_AUTO_ALARM_INACTIVITY_MINUTES, minutes) }
     }
@@ -430,6 +444,20 @@ class AlarmManager(private val context: Context) {
     fun setLastInactivityResetTime(time: Long) {
         prefs.edit { putLong(KEY_LAST_INACTIVITY_RESET, time) }
     }
+
+    fun markPendingDeletion(alarmId: Int) {
+        val updated = getPendingDeletedAlarmIds().toMutableSet().apply { add(alarmId) }
+        prefs.edit { putStringSet(KEY_PENDING_DELETED_ALARMS, updated.map { it.toString() }.toSet()) }
+    }
+
+    fun clearPendingDeletion(alarmId: Int) {
+        val updated = getPendingDeletedAlarmIds().toMutableSet().apply { remove(alarmId) }
+        prefs.edit { putStringSet(KEY_PENDING_DELETED_ALARMS, updated.map { it.toString() }.toSet()) }
+    }
+
+    fun getPendingDeletedAlarmIds(): Set<Int> =
+        prefs.getStringSet(KEY_PENDING_DELETED_ALARMS, emptySet())?.mapNotNull { it.toIntOrNull() }?.toSet()
+            ?: emptySet()
 
     companion object {
         private const val PREFS_NAME = "AlarmApp"
@@ -442,5 +470,7 @@ class AlarmManager(private val context: Context) {
         private const val KEY_AUTO_ALARM_MINUTE = "auto_alarm_minute"
         private const val KEY_AUTO_ALARM_INACTIVITY_MINUTES = "auto_alarm_inactivity_minutes"
         private const val KEY_LAST_INACTIVITY_RESET = "last_inactivity_reset_time"
+        private const val KEY_PENDING_DELETED_ALARMS = "pending_deleted_alarm_ids"
+        private const val TAG = "AlarmManager"
     }
 }

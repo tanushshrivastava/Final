@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-11-06T23:41:58.429215Z">
+        <DropdownSelection timestamp="2025-12-08T23:08:27.019969Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=RFCT609RAQR" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=/Users/tanus/.android/avd/Medium_Phone_2.avd" />
             </handle>
           </Target>
         </DropdownSelection>
