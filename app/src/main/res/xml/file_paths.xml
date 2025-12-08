@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cache directory for exported CSV files -->
+    <cache-path
+        name="csv_exports"
+        path="/" />
+    
+    <!-- External files directory (optional, for future use) -->
+    <external-files-path
+        name="external_files"
+        path="/" />
+</paths>
+

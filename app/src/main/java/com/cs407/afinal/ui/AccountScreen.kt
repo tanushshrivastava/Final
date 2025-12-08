@@ -46,7 +46,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -173,6 +175,8 @@ private fun AuthForm(
     onNavigateToTips: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
+    
     // A Column to arrange the UI elements vertically.
     Column(
         modifier = modifier
@@ -235,7 +239,10 @@ private fun AuthForm(
             }
             // Submit button (Sign In or Create Account).
             Button(
-                onClick = onSubmit,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onSubmit()
+                },
                 enabled = !uiState.loading, // Disable button while a network request is in progress.
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -267,7 +274,10 @@ private fun AuthForm(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onNavigateToTips() },
+                    .clickable { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onNavigateToTips() 
+                    },
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
@@ -326,6 +336,7 @@ private fun SignedInContent(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Get the current context, which is needed for showing dialogs.
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
 
     Column(
         modifier = modifier.padding(horizontal = 24.dp, vertical = 32.dp),
@@ -382,7 +393,10 @@ private fun SignedInContent(
                     }
                     Switch(
                         checked = uiState.isDarkMode,
-                        onCheckedChange = { viewModel.setDarkMode(it) }
+                        onCheckedChange = { 
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.setDarkMode(it) 
+                        }
                     )
                 }
             }
@@ -416,7 +430,10 @@ private fun SignedInContent(
                     Text("Enable Auto Alarm")
                     Switch(
                         checked = uiState.autoAlarmEnabled,
-                        onCheckedChange = { viewModel.setAutoAlarmEnabled(it) } // Update ViewModel on change.
+                        onCheckedChange = { 
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.setAutoAlarmEnabled(it) 
+                        } // Update ViewModel on change.
                     )
                 }
 
@@ -425,6 +442,7 @@ private fun SignedInContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { // The whole row is clickable to open the time picker.
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             TimePickerDialog(
                                 context,
                                 { _, hour, minute ->
@@ -460,6 +478,7 @@ private fun SignedInContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { // The whole row is clickable to open the selection dialog.
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             android.app.AlertDialog
                                 .Builder(context)
                                 .setTitle("Inactivity Duration")
@@ -504,7 +523,10 @@ private fun SignedInContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onNavigateToTips() },
+                .clickable { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onNavigateToTips() 
+                },
             shape = RoundedCornerShape(12.dp)
         ) {
             Row(
@@ -546,7 +568,10 @@ private fun SignedInContent(
 
         // Sign-out button at the bottom.
         Button(
-            onClick = onSignOut,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onSignOut()
+            },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
         ) {

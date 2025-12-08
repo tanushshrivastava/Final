@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -33,6 +35,7 @@ fun SmartSleepApp(
     sleepViewModel: SleepViewModel = viewModel()
 ) {
     val navController = rememberNavController()
+    val haptic = LocalHapticFeedback.current
     val destinations = remember { 
         listOf(
             BottomDestination.Alarm, 
@@ -53,6 +56,7 @@ fun SmartSleepApp(
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             navController.navigate(destination.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
