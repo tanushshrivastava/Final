@@ -50,6 +50,10 @@ class AlarmManager(private val context: Context) {
      * Handles both one-time and recurring alarms.
      */
     fun scheduleAlarm(alarm: AlarmItem) {
+        if (!canScheduleExactAlarms()) {
+            Log.w(TAG, "Exact alarm permission missing; skipping schedule for id=${alarm.id}")
+            return
+        }
         // For recurring alarms, calculate next occurrence
         val actualTriggerTime = if (alarm.recurringDays.isNotEmpty()) {
             calculateNextOccurrence(alarm.triggerAtMillis, alarm.recurringDays)
