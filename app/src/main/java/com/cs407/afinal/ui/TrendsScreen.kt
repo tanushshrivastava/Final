@@ -610,11 +610,51 @@ private fun calculateSleepStats(history: List<SleepHistoryEntry>): SleepStats {
 }
 
 private fun calculateWeeklyData(history: List<SleepHistoryEntry>): List<DailySleepData> {
+    if (history.isEmpty()) return emptyList()
+
+    fun dayDuration(date: LocalDate): Float {
+        val dayEntries = history.filter {
+            Instant.ofEpochMilli(it.actualDismissedMillis)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate() == date
+        }
+        val totalDuration = dayEntries.sumOf { entry ->
+            entry.plannedBedTimeMillis?.let { bedTime ->
+                val d = entry.actualDismissedMillis - bedTime
+                if (d > 0) d else 0L
+            } ?: 0L
+        }
+        return totalDuration / (1000 * 60 * 60f)
+    }
+
     val today = LocalDate.now()
-    return (6 downTo 0).map { daysAgo ->
+    val recentWeek = (6 downTo 0).map { daysAgo ->
         val date = today.minusDays(daysAgo.toLong())
-        val dayEntries = history.filter { Instant.ofEpochMilli(it.actualDismissedMillis).atZone(ZoneId.systemDefault()).toLocalDate() == date }
-        val totalDuration = dayEntries.sumOf { entry -> entry.plannedBedTimeMillis?.let { bedTime -> val d = entry.actualDismissedMillis - bedTime; if (d > 0) d else 0L } ?: 0L }
-        DailySleepData(dayLabel = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(1), durationHours = totalDuration / (1000 * 60 * 60f))
+        DailySleepData(
+            dayLabel = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(1),
+            durationHours = dayDuration(date)
+        )
+    }
+
+    // If we have no data in the last 7 days (e.g., seeded historical data), fall back to
+    // the latest 7 distinct days from history so the chart isn't empty.
+    val hasRecentData = recentWeek.any { it.durationHours > 0f }
+    if (hasRecentData) return recentWeek
+
+    val daysWithData = history
+        .map {
+            Instant.ofEpochMilli(it.actualDismissedMillis)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+        }
+        .distinct()
+        .sorted()
+        .takeLast(7)
+
+    return daysWithData.map { date ->
+        DailySleepData(
+            dayLabel = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(1),
+            durationHours = dayDuration(date)
+        )
     }
 }
